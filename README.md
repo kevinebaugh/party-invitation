@@ -2,6 +2,8 @@
 
 A themed party invitation with RSVPs, a guest-list admin page, and optional email notifications. It runs entirely on [Cloudflare](https://www.cloudflare.com/) (Workers + D1), and the free plan is enough for a birthday party.
 
+**[Try the live demo](https://kevinebaugh.com/party-invitation/)**: flip between the themes, send a test RSVP, and use the admin page (passphrase: `demo`). Nothing is saved to a server.
+
 Guests get one link to text or email. They see the invitation, add it to their calendar, and RSVP from their phone. You get a private page that shows who's coming, how many kids, food preferences and allergies, and you can edit or delete responses.
 
 | | | |
@@ -12,6 +14,8 @@ Guests get one link to text or email. They see the invitation, add it to their c
 (The images above are the link previews guests see in iMessage, WhatsApp, Slack and email. Alex and the address are made up.)
 
 ## Live demo
+
+Try it here: **<https://kevinebaugh.com/party-invitation/>**
 
 A static demo lets people flip between all six themes, send a test RSVP, and use the real admin page. A bar at the top switches themes and keeps your scroll position. It has no server: a small script in the page pretends to be the backend, with a few made-up guests stored only in the visitor's own browser. Nothing is shared between visitors or sent anywhere. The admin passphrase in the demo is `demo`, and a "Reset demo data" button starts over.
 
