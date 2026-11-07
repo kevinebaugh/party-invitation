@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Skipped on private repositories (GitHub Pages needs a public repo on the free plan), so it doesn't fail noisily.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
