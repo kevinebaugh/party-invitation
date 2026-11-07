@@ -1,0 +1,323 @@
+// Renders dist/ (static site) and src/config.generated.json (Worker settings)
+// from event.config.json + themes/<theme>.mjs.
+//
+//   node scripts/build.mjs [--skip-og] [--theme=<id>] [--out=<dir>] [--config=<file>]
+
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
+import {
+  localToUtc, icsStamp, fmtDateLong, fmtDateShort, fmtClock, fmtTime, fmtTimeShort, fmtRange, ordinal,
+} from "./lib/time.mjs";
+
+const root = path.resolve(import.meta.dirname, "..");
+const args = Object.fromEntries(process.argv.slice(2).map((a) => {
+  const [k, v] = a.replace(/^--/, "").split("=");
+  return [k, v ?? true];
+}));
+
+export const THEMES = fs.readdirSync(path.join(root, "themes")).filter((f) => f.endsWith(".mjs")).map((f) => f.replace(/\.mjs$/, ""));
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const fill = (s, v) => s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const inlineJson = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
+
+const DEFAULT_COPY = {
+  kicker: "You're invited",
+  sub: "You're invited to a {partyType}!",
+  whenWhere: "When & Where", plan: "The Plan", rsvp: "RSVP",
+  when: "When", where: "Where", addCal: "Add to calendar",
+  cta: "RSVP", send: "Send RSVP", again: "Change my answer",
+  childLabel: "Your child or children", childPlaceholder: "Name (or names)",
+  parentLabel: "Your name", parentPlaceholder: "Parent / guardian",
+  attendDefault: "Can they make it?", attendNamed: "Can {name} make it?",
+  yes: "Yes, we'll be there!", no: "Can't make it",
+  howMany: "How many kids are coming?",
+  stayLegend: "Staying or dropping off?",
+  dropoff: "We'll drop off {name} and pick them up at {end}", dropoffDefaultName: "our child",
+  allergies: "(Optional) Any allergies or dietary restrictions?",
+  notes: "Anything else?", optional: "Optional",
+  doneYesTitle: "See you there!", doneYesText: "You're on the list! We'll see {name} on {date} at {start}.",
+  doneNoTitle: "Thanks for letting us know", doneNoText: "We'll miss {name}! Thanks for letting us know.",
+  errorMissing: "Please add both names and pick yes or no.", errorGeneric: "Something went wrong. Please try again.",
+  ctaGlyph: "",
+};
+
+const DEFAULT_VARS = {
+  "--h1-size": "clamp(32px,10vw,48px)", "--h1-transform": "none", "--rendering": "auto", "--radius": "16px", "--bw": "3px",
+  "--hero-shadow": "transparent", "--scrim": "transparent",
+};
+
+function loadConfig(o) {
+  const file = path.resolve(root, o.config || "event.config.json");
+  const c = JSON.parse(fs.readFileSync(file, "utf8"));
+  const missing = ["honoree", "date", "start", "end", "timezone", "address"].filter((k) => !c[k]);
+  if (missing.length) throw new Error(`event.config.json is missing: ${missing.join(", ")}`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date)) throw new Error('"date" must look like 2027-03-14');
+  for (const k of ["start", "end"]) if (!/^\d{1,2}:\d{2}$/.test(c[k])) throw new Error(`"${k}" must look like 14:00`);
+  try { new Intl.DateTimeFormat("en-US", { timeZone: c.timezone }); } catch { throw new Error(`Unknown timezone "${c.timezone}" (use an IANA name like America/New_York)`); }
+  Object.assign(c, o.overrides || {});
+  if (o.theme) c.theme = o.theme;
+  if (!THEMES.includes(c.theme)) throw new Error(`Unknown theme "${c.theme}". Available: ${THEMES.join(", ")}`);
+  c.siteUrl = (c.siteUrl || "").replace(/\/+$/, "");
+  return c;
+}
+
+export async function build(opts = {}) {
+  const o = { ...args, ...opts };
+  const c = loadConfig(o);
+  const theme = (await import(pathToFileURL(path.join(root, "themes", `${c.theme}.mjs`)).href)).default;
+  const out = path.resolve(root, o.out || "dist");
+
+  // ---- derived values ----
+  const start = localToUtc(c.date, c.start, c.timezone);
+  const end = localToUtc(c.date, c.end, c.timezone);
+  const dateLong = fmtDateLong(c.date), dateShort = fmtDateShort(c.date);
+  const range = fmtRange(c.start, c.end);
+  const endShort = fmtTimeShort(c.end);
+  const copy = { ...DEFAULT_COPY, ...theme.copy, ...(c.copy || {}) };
+  const maxKids = Math.max(1, Math.min(10, c.maxKids || 5));
+  const hasAge = Number.isFinite(c.age) && c.age > 0;
+  const partyType = c.partyType || "birthday party";
+  const lines = hasAge ? [c.honoree, "is turning"] : [`${c.honoree}'s`, partyType];
+  const bigText = hasAge ? String(c.age) : "";
+  const title = c.ogTitle || (hasAge ? `${c.honoree} is turning ${c.age}! ${cap(partyType)} ${dateShort}` : `${c.honoree}'s ${partyType} ${dateShort}`);
+  const description = c.ogDescription || `${dateLong} · ${range}${c.locationShort ? ` · ${c.locationShort}` : ""}. RSVP here.`;
+  const emailBrand = hasAge ? `${c.honoree}'s ${ordinal(c.age)} birthday` : `${c.honoree}'s ${partyType}`;
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}`;
+  const siteUrl = c.siteUrl;
+  const abs = (p) => (siteUrl ? `${siteUrl}${p}` : p);
+  if (!siteUrl) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
+
+  const hue = theme.hue || theme.confetti.filter((x) => !/^#f{3}(f{3})?$/i.test(x));
+  const ogHash = crypto.createHash("sha256").update(JSON.stringify({
+    v: 2, id: theme.id, vars: theme.vars, og: theme.og, fonts: theme.fonts, lines, bigText, partyType, dateLong, range,
+    loc: c.locationShort || "", sprites: theme.sprites.slice(0, 3).map((s) => s.uri), letter: c.honoree[0],
+  })).digest("hex").slice(0, 8);
+  const ogFile = `og-${ogHash}.png`;
+
+  // ---- html ----
+  const food = c.food && c.food.options?.length ? c.food : null;
+  const foodLabel = food?.label || "Food";
+  const planHtml = (c.plan || []).map((p) => `      <li><b>${esc(fmtClock(p.time))}</b> ${esc(p.text)}</li>`).join("\n");
+  const kidOptions = Array.from({ length: maxKids }, (_, i) => `<option>${i + 1}</option>`).join("");
+  const g = copy.ctaGlyph;
+  const note = c.note ? fill(c.note, { end: endShort, start: fmtTimeShort(c.start) }) : "";
+  const calText = `${emailBrand}`;
+  const gcal = "https://calendar.google.com/calendar/render?" + new URLSearchParams({
+    action: "TEMPLATE", text: calText, dates: `${icsStamp(start)}/${icsStamp(end)}`, location: c.address,
+    details: `${cap(partyType)}.${siteUrl ? ` RSVP: ${siteUrl}` : ""}`,
+  }).toString().replace(/\+/g, "%20");
+
+  const partyConfig = {
+    sprites: theme.sprites, spriteOpacity: theme.spriteOpacity ?? 0.5, confetti: theme.confetti,
+    vals: { date: dateLong, start: fmtTime(c.start), end: endShort },
+    copy: {
+      ...Object.fromEntries(["doneYesTitle", "doneYesText", "doneNoTitle", "doneNoText", "attendDefault", "attendNamed", "dropoffDefaultName", "errorMissing", "errorGeneric"].map((k) => [k, copy[k]])),
+      dropoff: fill(copy.dropoff, { end: endShort }),
+    },
+  };
+
+  const headline = lines.map((l, i) => esc(l) + (i < lines.length - 1 || bigText ? "<br>" : "")).join("");
+  const layerHtml = theme.layers.map((l, i) => `  <div class="layer l${i}" data-speed="${l.speed}"></div>`).join("\n");
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}">
+${siteUrl ? `<link rel="canonical" href="${esc(siteUrl)}/">\n` : ""}<meta name="robots" content="noindex">
+<meta name="theme-color" content="${esc(theme.vars["--bg"])}">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${esc(emailBrand)}">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(description)}">
+${siteUrl ? `<meta property="og:url" content="${esc(siteUrl)}/">\n` : ""}<meta property="og:image" content="${esc(abs("/" + ogFile))}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(`${lines.join(" ")} ${bigText}`.trim() + `. ${cap(partyType)}, ${dateLong}, ${range}.`)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(description)}">
+<meta name="twitter:image" content="${esc(abs("/" + ogFile))}">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?${theme.fonts.url}&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="sky" aria-hidden="true">
+${layerHtml}
+  <div id="sprites"></div>
+</div>
+
+<main>
+  <header class="hero">
+    <p class="kicker">${esc(copy.kicker)}</p>
+    <h1 aria-label="${esc((lines.join(" ") + " " + bigText).trim())}">${headline}${bigText ? `<span class="big" id="big" title="Tap me!">${esc(bigText)}</span>` : ""}</h1>
+    <p class="sub">${esc(fill(copy.sub, { partyType }))}</p>
+  </header>
+
+  <section class="card">
+    <h2>${esc(copy.whenWhere)}</h2>
+    <dl>
+      <dt>${esc(copy.when)}</dt>
+      <dd>${esc(dateLong)}<br>${esc(range)}</dd>
+      <dt>${esc(copy.where)}</dt>
+      <dd>${c.venueName ? esc(c.venueName) + "<br>" : ""}<a href="${esc(mapsUrl)}" target="_blank" rel="noopener">${esc(c.address)}</a></dd>
+    </dl>
+    <p class="addcal">${esc(copy.addCal)}</p>
+    <div class="cals">
+      <a class="btn small" href="/party.ics">Apple</a>
+      <a class="btn small" href="${esc(gcal)}" target="_blank" rel="noopener">Google</a>
+    </div>
+  </section>
+
+  <button class="btn cta cta-block" type="button" id="rsvp-go">${esc(g + copy.cta)}</button>
+
+  <section class="card">
+    <h2>${esc(copy.plan)}</h2>
+    <ol class="plan">
+${planHtml}
+    </ol>
+${note ? `    <p>${esc(note)}</p>\n` : ""}  </section>
+
+  <section class="card" id="rsvp">
+    <h2>${esc(copy.rsvp)}</h2>
+    <form id="rsvp-form" novalidate>
+      <label>${esc(copy.childLabel)}
+        <input name="child_name" required maxlength="80" autocapitalize="words" autocomplete="off" placeholder="${esc(copy.childPlaceholder)}">
+      </label>
+      <label>${esc(copy.parentLabel)}
+        <input name="parent_name" required maxlength="80" autocapitalize="words" autocomplete="name" placeholder="${esc(copy.parentPlaceholder)}">
+      </label>
+      <fieldset>
+        <legend id="attend-legend">${esc(copy.attendDefault)}</legend>
+        <label class="choice"><input type="radio" name="attending" value="yes" required> <span>${esc(copy.yes)}</span></label>
+        <label class="choice"><input type="radio" name="attending" value="no"> <span>${esc(copy.no)}</span></label>
+      </fieldset>
+      <div id="yes-only" hidden>
+        <label>${esc(copy.howMany)}
+          <select name="num_kids">${kidOptions}</select>
+        </label>
+        <fieldset>
+          <legend>${esc(copy.stayLegend)}</legend>
+          <label class="choice check"><input type="checkbox" name="dropping_off"> <span id="dropoff-label">${esc(fill(copy.dropoff, { end: endShort, name: copy.dropoffDefaultName }))}</span></label>
+        </fieldset>
+${food ? `        <fieldset>
+          <legend>(${esc(copy.optional)}) ${esc(food.question || "Any food preferences?")}</legend>
+${food.options.map((o) => `          <label class="choice"><input type="checkbox" name="food" value="${esc(o)}"> <span>${esc(o)}</span></label>`).join("\n")}
+        </fieldset>
+` : ""}        <label>${esc(copy.allergies)}
+          <input name="allergies" maxlength="200" placeholder="${esc(copy.optional)}">
+        </label>
+      </div>
+      <label>${esc(copy.notes)}
+        <textarea name="notes" maxlength="500" rows="2" placeholder="${esc(copy.optional)}"></textarea>
+      </label>
+      <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <p id="msg" role="status"></p>
+      <button class="btn" type="submit">${esc(g + copy.send)}</button>
+    </form>
+    <div id="done" hidden>
+      <h3 id="done-title"></h3>
+      <p id="done-text"></p>
+      <button class="btn small" id="again" type="button">${esc(copy.again)}</button>
+    </div>
+  </section>
+
+${c.footer ? `  <footer>${esc(c.footer)}</footer>\n` : ""}</main>
+<script type="application/json" id="party-config">${inlineJson(partyConfig)}</script>
+<script src="/app.js"></script>
+</body>
+</html>
+`;
+
+  // ---- css ----
+  const fam = (name, fb) => `"${name}",${fb}`;
+  const vars = {
+    ...DEFAULT_VARS, ...theme.vars,
+    "--display": fam(theme.fonts.display, theme.fonts.fallback || "system-ui,sans-serif"),
+    "--body": 'Nunito,system-ui,sans-serif',
+    "--glyph": JSON.stringify(copy.ctaGlyph || ""),
+  };
+  const layerCss = theme.layers.map((l, i) => {
+    let s = `.l${i}{${l.css}}`;
+    if (l.twinkle) s += `\n.l${i}{animation:twinkle ${Math.abs(l.twinkle)}s steps(2) infinite${l.twinkle < 0 ? " reverse" : ""}}`;
+    return s;
+  }).join("\n");
+  const hueCss = `@keyframes hue{${hue.map((col, i) => `${Math.round((i / hue.length) * 100)}%{color:${col}}`).join("")}100%{color:${hue[0]}}}`;
+  const css = `:root{${Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";")}}\n`
+    + fs.readFileSync(path.join(root, "src/template/base.css"), "utf8")
+    + `\n/* theme: ${theme.id} */\n${layerCss}\n${hueCss}\n`;
+
+  // ---- calendar file ----
+  const icsEsc = (s) => s.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//party-invitation//EN", "BEGIN:VEVENT",
+    `UID:${ogHash}-${c.date}@party-invitation`, `DTSTAMP:${icsStamp(new Date())}`,
+    `DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`,
+    `SUMMARY:${icsEsc(calText)}`, `LOCATION:${icsEsc(c.address)}`,
+    `DESCRIPTION:${icsEsc(`${cap(partyType)}.${siteUrl ? ` RSVP: ${siteUrl}` : ""}`)}`,
+    "END:VEVENT", "END:VCALENDAR",
+  ].join("\r\n") + "\r\n";
+
+  // ---- admin ----
+  const adminHtml = fs.readFileSync(path.join(root, "src/template/admin.html"), "utf8")
+    .replaceAll("{{adminTitle}}", esc(`${c.honoree}'s guest list`))
+    .replaceAll("{{foodLabel}}", esc(foodLabel))
+    .replaceAll("{{maxKids}}", String(maxKids));
+
+  // ---- favicon ----
+  const letter = esc(c.honoree[0].toUpperCase());
+  const iconSvg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}"><rect width="64" height="64" rx="14" fill="${esc(theme.vars["--accent"])}"/><text x="32" y="45" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="800" font-size="40" fill="${esc(theme.vars["--accent-ink"])}">${letter}</text></svg>`;
+
+  // ---- write ----
+  fs.rmSync(out, { recursive: true, force: true });
+  fs.mkdirSync(path.join(out, "admin"), { recursive: true });
+  fs.writeFileSync(path.join(out, "index.html"), html);
+  fs.writeFileSync(path.join(out, "style.css"), css);
+  fs.copyFileSync(path.join(root, "src/template/app.js"), path.join(out, "app.js"));
+  fs.writeFileSync(path.join(out, "party.ics"), ics);
+  fs.writeFileSync(path.join(out, "admin/index.html"), adminHtml);
+  fs.writeFileSync(path.join(out, "favicon.svg"), iconSvg(64));
+
+  const workerConfig = {
+    maxKids, foodLabel, emailBrand, emailDate: dateShort,
+    notify: { to: c.notify?.to || [], from: c.notify?.from || "" },
+    copy: { errorMissing: copy.errorMissing },
+  };
+  if (!o.out) fs.writeFileSync(path.join(root, "src/config.generated.json"), JSON.stringify(workerConfig, null, 2) + "\n");
+
+  // ---- preview image + touch icon (needs a local Chrome/Edge; see README) ----
+  const cacheDir = path.join(root, ".cache", "og", ogHash);
+  const wantOg = !o["skip-og"];
+  if (wantOg && !fs.existsSync(path.join(cacheDir, "og.png"))) {
+    const { renderImages } = await import("./og.mjs");
+    await renderImages({ theme, lines, bigText, partyType, dateLong, range, locationShort: c.locationShort || "", iconSvg: iconSvg(180), outDir: cacheDir });
+  }
+  if (fs.existsSync(path.join(cacheDir, "og.png"))) {
+    fs.copyFileSync(path.join(cacheDir, "og.png"), path.join(out, ogFile));
+    fs.copyFileSync(path.join(cacheDir, "apple-touch-icon.png"), path.join(out, "apple-touch-icon.png"));
+  } else if (wantOg) {
+    throw new Error("Preview image was not generated.");
+  } else {
+    console.warn("! Skipped the preview image (--skip-og). Run `npm run build` before sharing the link.");
+  }
+
+  console.log(`Built "${theme.id}" theme -> ${path.relative(root, out) || "."}/  (${ogFile})`);
+  return { out, theme, ogFile, ogHash };
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  build().catch((e) => { console.error(`\nBuild failed: ${e.message}\n`); process.exit(1); });
+}

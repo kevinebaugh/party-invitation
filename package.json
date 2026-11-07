@@ -1,0 +1,23 @@
+{
+  "name": "party-invitation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "A themed party invitation with RSVP, a guest-list admin page and email notifications. Runs on Cloudflare Workers + D1.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:fast": "node scripts/build.mjs --skip-og",
+    "dev": "npm run build:fast && wrangler d1 migrations apply party-rsvps --local && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply party-rsvps --remote",
+    "check": "node scripts/check.mjs",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261107.1",
+    "playwright-core": "^1.65.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.158.0"
+  }
+}

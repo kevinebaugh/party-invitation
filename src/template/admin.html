@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>{{adminTitle}}</title>
+<style>
+html,body{height:100%}
+body{margin:0;font:16px/1.4 system-ui,sans-serif;background:#12123a;color:#fff;padding:20px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box}
+h1{font-size:20px;margin:0 0 16px}
+#login{flex:1;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:12px;max-width:520px;width:100%;margin:0 auto}
+#login[hidden]{display:none}
+#login input{flex:1 1 240px;font-size:20px}
+#login button{font-size:20px;padding:10px 24px}
+#err{flex-basis:100%;text-align:center;margin:0;color:#ff4fa3}
+#list{flex:1;width:100%}
+input,select,textarea,button{font:inherit;padding:10px;border:2px solid #4b4bd6;background:#0f0f36;color:#fff;box-sizing:border-box}
+button{background:#39ff88;color:#10102e;font-weight:700;cursor:pointer;border-color:#39ff88}
+button.ghost{background:transparent;color:#fff;border-color:#4b4bd6}
+button.danger{background:#ff4fa3;border-color:#ff4fa3;color:#10102e}
+button.sm{padding:4px 10px;font-size:14px}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.stat{background:#1d1d5c;border:2px solid #4b4bd6;padding:10px 14px}.stat b{display:block;font-size:26px;color:#39ff88}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #33337f;vertical-align:top}
+th{color:#ffd23f}.no{opacity:.55}
+.wrap{overflow-x:auto}
+td.act{white-space:nowrap}
+td.act button{margin-right:6px}
+dialog{background:#1d1d5c;color:#fff;border:3px solid #4b4bd6;padding:20px;max-width:460px;width:calc(100% - 32px);box-sizing:border-box;max-height:calc(100dvh - 32px);overflow-y:auto;margin:auto}
+dialog::backdrop{background:rgba(5,5,25,.7)}
+dialog label{display:block;margin:0 0 12px;font-size:14px}
+dialog input:not([type=checkbox]),dialog select,dialog textarea{display:block;width:100%;margin-top:4px}
+dialog label.row{display:flex;gap:8px;align-items:center}
+.btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.tabs{display:flex;gap:8px;margin:0 0 16px}
+.tabs button.on{background:#4b4bd6;border-color:#4b4bd6}
+#toasts{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:10;width:calc(100% - 32px);max-width:420px}
+.toast{display:flex;gap:12px;align-items:center;justify-content:space-between;background:#1d1d5c;border:2px solid #ffd23f;padding:10px 14px}
+#eerr{color:#ff4fa3;min-height:1.2em;margin:0}
+
+@media (max-width:720px){
+  body{padding:14px}
+  h1{font-size:18px}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:8px 10px}.stat b{font-size:22px}
+  .stat:last-child{grid-column:1 / -1}
+  .tabs button{flex:1;padding:12px 8px}
+  .wrap{overflow:visible}
+  table,tbody,tr,td{display:block;width:100%;box-sizing:border-box}
+  thead{display:none}
+  tr{background:#1d1d5c;border:2px solid #4b4bd6;margin:0 0 12px;padding:10px 12px}
+  td{border:0;padding:4px 0;display:flex;gap:12px;justify-content:space-between;text-align:right}
+  td:empty{display:none}
+  td[data-l]::before{content:attr(data-l);color:#ffd23f;font-weight:600;text-align:left;flex:none}
+  td.name{font-size:18px;font-weight:700;text-align:left;justify-content:flex-start;padding-bottom:6px;border-bottom:1px solid #33337f;margin-bottom:4px}
+  td.name::before{display:none}
+  td.act{display:flex;gap:10px;justify-content:stretch;padding-top:10px}
+  td.act button{flex:1;margin:0;padding:12px 8px;font-size:15px}
+  td.empty{display:block;text-align:left}
+  dialog{padding:16px}
+  dialog input,dialog select,dialog textarea{font-size:16px}
+  #toasts{bottom:12px}
+}
+</style>
+</head>
+<body>
+<h1 id="title">{{adminTitle}}</h1>
+<form id="login">
+  <input type="password" id="pw" placeholder="Passphrase" autofocus>
+  <button>Enter</button>
+  <p id="err"></p>
+</form>
+<div id="list" hidden>
+  <div class="tabs"><button class="ghost" id="tab-active"></button><button class="ghost" id="tab-deleted"></button></div>
+  <div class="stats" id="stats"></div>
+  <div class="wrap"><table>
+    <thead><tr><th>Kid</th><th>Parent</th><th>Coming?</th><th>Kids</th><th>Parent staying</th><th>{{foodLabel}}</th><th>Allergies</th><th>Notes</th><th>Updated</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+</div>
+
+<div id="toasts"></div>
+
+<dialog id="edit">
+  <form method="dialog" id="eform">
+    <h2 style="margin-top:0;font-size:18px">Edit RSVP</h2>
+    <label>Kid name(s)<input name="child_name" maxlength="80" required></label>
+    <label>Parent name<input name="parent_name" maxlength="80" required></label>
+    <label>Coming?<select name="attending"><option value="yes">Yes</option><option value="no">No</option></select></label>
+    <label>Kids coming<input name="num_kids" type="number" min="1" max="{{maxKids}}"></label>
+    <label class="row"><input name="parents_staying" type="checkbox"> A grown-up is staying</label>
+    <label>{{foodLabel}} (comma separated)<input name="food_preference" maxlength="160"></label>
+    <label>Allergies / dietary<input name="allergies" maxlength="200"></label>
+    <label>Notes<textarea name="notes" maxlength="500" rows="2"></textarea></label>
+    <p id="eerr"></p>
+    <div class="btns"><button type="button" class="ghost" id="ecancel">Cancel</button><button type="submit">Save changes</button></div>
+  </form>
+</dialog>
+
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const api = "/api/admin/rsvps";
+let rsvps = [];
+
+let view = "active";
+async function load() {
+  const r = await fetch(api);
+  if (!r.ok) return false;
+  rsvps = (await r.json()).rsvps;
+  render();
+  return true;
+}
+function render() {
+  const live = rsvps.filter((x) => !x.deleted_at), gone = rsvps.filter((x) => x.deleted_at);
+  $("tab-active").textContent = `Active (${live.length})`;
+  $("tab-deleted").textContent = `Deleted (${gone.length})`;
+  $("tab-active").classList.toggle("on", view === "active");
+  $("tab-deleted").classList.toggle("on", view === "deleted");
+  const shown = view === "active" ? live : gone;
+  const yes = live.filter((x) => x.attending);
+  const food = {};
+  yes.forEach((x) => (x.food_preference || "").split(",").map((s) => s.trim()).filter(Boolean).forEach((p) => { food[p] = (food[p] || 0) + 1; }));
+  $("stats").hidden = view !== "active";
+  $("stats").innerHTML =
+    `<div class=stat><b>${yes.reduce((n, x) => n + (x.num_kids || 1), 0)}</b>kids coming</div><div class=stat><b>${yes.length}</b>families yes</div>` +
+    `<div class=stat><b>${live.length - yes.length}</b>can't make it</div>` +
+    `<div class=stat><b>${yes.filter((x) => x.parents_staying).length}</b>parents staying</div>` +
+    `<div class=stat>{{foodLabel}}: ${Object.entries(food).map(([k, v]) => `${esc(k)} ×${v}`).join(", ") || "none yet"}</div>`;
+  const actions = (x) => view === "active"
+    ? `<button class="sm ghost" data-edit="${x.id}">Edit</button><button class="sm danger" data-del="${x.id}">Delete</button>`
+    : `<button class="sm" data-restore="${x.id}">Restore</button><button class="sm danger" data-hard="${x.id}">Delete forever</button>`;
+  $("rows").innerHTML = shown.length ? shown.map((x) => `<tr class="${x.attending ? "" : "no"}"><td class="name" data-l="Kid">${esc(x.child_name)}</td><td data-l="Parent">${esc(x.parent_name)}</td><td data-l="Coming?">${x.attending ? "Yes" : "No"}</td><td data-l="Kids">${x.attending ? x.num_kids : ""}</td><td data-l="Parent staying">${x.attending && x.parents_staying ? "Yes" : ""}</td><td data-l="{{foodLabel}}">${esc(x.food_preference)}</td><td data-l="Allergies">${esc(x.allergies)}</td><td data-l="Notes">${esc(x.notes)}</td><td data-l="${view === "active" ? "Updated" : "Deleted"}">${esc(view === "active" ? x.updated_at : x.deleted_at)}</td><td class="act">${actions(x)}</td></tr>`).join("")
+    : `<tr><td colspan="10" class="empty" style="color:#8d8dc0">${view === "active" ? "No RSVPs yet." : "Nothing deleted."}</td></tr>`;
+  $("login").hidden = true; $("list").hidden = false;
+}
+$("tab-active").onclick = () => { view = "active"; render(); };
+$("tab-deleted").onclick = () => { view = "deleted"; render(); };
+
+// ---- edit ----
+const ef = $("eform");
+function openEdit(x) {
+  ef.dataset.id = x.id;
+  ef.child_name.value = x.child_name; ef.parent_name.value = x.parent_name;
+  ef.attending.value = x.attending ? "yes" : "no";
+  ef.num_kids.value = x.num_kids || 1;
+  ef.parents_staying.checked = !!x.parents_staying;
+  ef.food_preference.value = x.food_preference; ef.allergies.value = x.allergies; ef.notes.value = x.notes;
+  $("eerr").textContent = "";
+  $("edit").showModal();
+}
+$("ecancel").onclick = () => $("edit").close();
+ef.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await fetch(`${api}/${ef.dataset.id}`, {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      child_name: ef.child_name.value, parent_name: ef.parent_name.value, attending: ef.attending.value,
+      num_kids: +ef.num_kids.value || 1, parents_staying: ef.parents_staying.checked,
+      food_preference: ef.food_preference.value, allergies: ef.allergies.value, notes: ef.notes.value,
+    }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $("eerr").textContent = d.error || "Couldn't save."; return; }
+  $("edit").close(); load();
+});
+
+// ---- delete: soft delete + 5-second restore toast; "Delete forever" asks first ----
+async function restore(id) {
+  await fetch(`${api}/${id}/restore`, { method: "POST" });
+  await load();
+  if (view === "deleted" && !rsvps.some((x) => x.deleted_at)) { view = "active"; render(); } // nothing left to show
+}
+// "Delete forever": 5-second countdown with Cancel, then the row is removed for good
+function countdownHardDelete(x) {
+  let n = 5;
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  const label = document.createElement("span");
+  const btn = document.createElement("button");
+  btn.className = "sm"; btn.textContent = "Cancel";
+  toast.append(label, btn);
+  $("toasts").append(toast);
+  const tick = () => { label.textContent = `Deleting ${x.child_name}'s RSVP forever… ${n}`; };
+  tick();
+  const timer = setInterval(async () => {
+    n -= 1;
+    if (n > 0) return tick();
+    clearInterval(timer);
+    await fetch(`${api}/${x.id}?hard=1`, { method: "DELETE" });
+    toast.remove(); load();
+  }, 1000);
+  btn.onclick = () => { clearInterval(timer); toast.remove(); };
+}
+
+$("rows").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  const id = +(b.dataset.edit || b.dataset.del || b.dataset.restore || b.dataset.hard);
+  const x = rsvps.find((r) => r.id === id); if (!x) return;
+  if (b.dataset.edit) openEdit(x);
+  else if (b.dataset.del) { await fetch(`${api}/${id}`, { method: "DELETE" }); load(); }
+  else if (b.dataset.restore) restore(id);
+  else countdownHardDelete(x);
+});
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passphrase: $("pw").value }) });
+  if (r.ok) await load(); else $("err").textContent = "Wrong passphrase.";
+});
+load().then((ok) => { if (ok) setInterval(() => { if (!$("edit").open) load(); }, 30000); });
+</script>
+</body>
+</html>

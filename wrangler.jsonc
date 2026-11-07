@@ -1,0 +1,16 @@
+{
+  // Change "name" if you want a different *.workers.dev address.
+  "name": "party-invitation",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "drop-trailing-slash",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    // Paste the id printed by `npx wrangler d1 create party-rsvps` (see README).
+    { "binding": "DB", "database_name": "party-rsvps", "database_id": "REPLACE_WITH_YOUR_D1_ID" }
+  ]
+}
