@@ -50,18 +50,57 @@ const DEFAULT_VARS = {
   "--hero-shadow": "transparent", "--scrim": "transparent",
 };
 
+const isRealDate = (str) => {
+  const [y, m, d] = str.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+};
+const minutesOf = (t) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t));
+  return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null;
+};
+const addDay = (str) => {
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+};
+
 function loadConfig(o) {
-  const file = path.resolve(root, o.config || "event.config.json");
-  const c = JSON.parse(fs.readFileSync(file, "utf8"));
-  const missing = ["honoree", "date", "start", "end", "timezone", "address"].filter((k) => !c[k]);
-  if (missing.length) throw new Error(`event.config.json is missing: ${missing.join(", ")}`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date)) throw new Error('"date" must look like 2027-03-14');
-  for (const k of ["start", "end"]) if (!/^\d{1,2}:\d{2}$/.test(c[k])) throw new Error(`"${k}" must look like 14:00`);
-  try { new Intl.DateTimeFormat("en-US", { timeZone: c.timezone }); } catch { throw new Error(`Unknown timezone "${c.timezone}" (use an IANA name like America/New_York)`); }
+  // event.config.local.json (git-ignored) wins, so a real address never has to be committed.
+  const localFile = path.join(root, "event.config.local.json");
+  const rel = o.config || (fs.existsSync(localFile) ? "event.config.local.json" : "event.config.json");
+  const file = path.resolve(root, rel);
+  const name = path.basename(file);
+  let c;
+  try {
+    c = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    throw new Error(`${name} couldn't be read: ${e.message}\n  JSON doesn't allow trailing commas, comments or single quotes. Check the line mentioned above.`);
+  }
+  if (!o.config && name === "event.config.local.json") console.log("Using event.config.local.json");
   Object.assign(c, o.overrides || {});
+  const missing = ["honoree", "date", "start", "end", "timezone", "address"].filter((k) => !c[k]);
+  if (missing.length) throw new Error(`${name} is missing: ${missing.join(", ")}`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date) || !isRealDate(c.date)) throw new Error(`"date" ("${c.date}") isn't a real date. Use the form 2027-03-14 (year-month-day).`);
+  for (const k of ["start", "end"]) if (minutesOf(c[k]) === null) throw new Error(`"${k}" ("${c[k]}") must be a 24-hour time like 14:00 or 09:30.`);
+  if (minutesOf(c.start) === minutesOf(c.end)) throw new Error('"start" and "end" are the same time.');
+  if (minutesOf(c.end) < minutesOf(c.start) && minutesOf(c.end) + 1440 - minutesOf(c.start) > 720) {
+    throw new Error(`"end" (${c.end}) is earlier than "start" (${c.start}), which would make the party last over 12 hours. Did you swap them? (A party that runs past midnight is fine, like 19:00 to 01:00.)`);
+  }
+  try { new Intl.DateTimeFormat("en-US", { timeZone: c.timezone }); } catch { throw new Error(`Unknown timezone "${c.timezone}" (use an IANA name like America/New_York)`); }
+  if (c.age != null && !(Number.isInteger(c.age) && c.age > 0 && c.age < 120)) throw new Error(`"age" ("${c.age}") must be a whole number like 7, or left out.`);
+  for (const [i, p] of (c.plan || []).entries()) {
+    if (!p || minutesOf(p.time) === null || !p.text) throw new Error(`plan item ${i + 1} needs a "time" like 15:30 and some "text".`);
+  }
+  if (c.food && (!Array.isArray(c.food.options) || c.food.options.some((x) => typeof x !== "string" || !x.trim()))) {
+    throw new Error('"food.options" must be a list of text choices, like ["Cheese", "Pepperoni"].');
+  }
   if (o.theme) c.theme = o.theme;
   if (!THEMES.includes(c.theme)) throw new Error(`Unknown theme "${c.theme}". Available: ${THEMES.join(", ")}`);
-  c.siteUrl = (c.siteUrl || "").replace(/\/+$/, "");
+  c.siteUrl = String(c.siteUrl || "").trim().replace(/\/+$/, "");
+  if (c.siteUrl && !/^https?:\/\/[^/\s]+$/.test(c.siteUrl)) {
+    throw new Error(`"siteUrl" ("${c.siteUrl}") should be just your site's address, starting with https://, like https://party.example.com (no path after it).`);
+  }
+  c._file = name;
   return c;
 }
 
@@ -73,7 +112,8 @@ export async function build(opts = {}) {
 
   // ---- derived values ----
   const start = localToUtc(c.date, c.start, c.timezone);
-  const end = localToUtc(c.date, c.end, c.timezone);
+  // a party that runs past midnight (end earlier than start) ends the next day
+  const end = localToUtc(minutesOf(c.end) < minutesOf(c.start) ? addDay(c.date) : c.date, c.end, c.timezone);
   const dateLong = fmtDateLong(c.date), dateShort = fmtDateShort(c.date);
   const range = fmtRange(c.start, c.end);
   const endShort = fmtTimeShort(c.end);
@@ -90,6 +130,13 @@ export async function build(opts = {}) {
   const siteUrl = c.siteUrl;
   const abs = (p) => (siteUrl ? `${siteUrl}${p}` : p);
   if (!siteUrl && !o.demo) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
+  if (!o.demo && !o.config && end < new Date()) console.warn(`! The party date (${c.date}) is in the past. Check "date" in ${c._file}.`);
+  if (siteUrl.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(siteUrl)) console.warn('! "siteUrl" uses http://. Use https:// so link previews work.');
+  const notifyTo = c.notify?.to || [];
+  if (notifyTo.length && !c.notify?.from) console.warn('! "notify.to" is set but "notify.from" is empty, so no emails will be sent. See the README section on email notifications.');
+  if (notifyTo.length && !o.demo && !/^\s*"send_email"/m.test(fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8"))) {
+    console.warn('! "notify.to" is set but wrangler.jsonc has no "send_email" binding, so no emails will be sent. See the README section on email notifications.');
+  }
 
   const hue = theme.hue || theme.confetti.filter((x) => !/^#f{3}(f{3})?$/i.test(x));
   const ogHash = crypto.createHash("sha256").update(JSON.stringify({

@@ -38,9 +38,11 @@ The demo always builds from `scripts/demo.config.json` (the fictional "Alex"), n
 
 ## Quick start
 
-You need: [Node.js](https://nodejs.org/) 20 or newer, a free [Cloudflare account](https://dash.cloudflare.com/sign-up), and Google Chrome or Microsoft Edge installed (used once to draw the link-preview image).
+You need: [Node.js](https://nodejs.org/) **22 or newer** (check with `node -v`), a free [Cloudflare account](https://dash.cloudflare.com/sign-up), and Google Chrome or Microsoft Edge installed (used to draw the link-preview image). A terminal is all else.
 
 ### 1. Get the code
+
+On GitHub, click **Use this template → Create a new repository** (or **Fork**), then clone your copy. Replace `<you>` with your GitHub username:
 
 ```bash
 git clone https://github.com/<you>/party-invitation.git
@@ -48,23 +50,27 @@ cd party-invitation
 npm install
 ```
 
+`npm install` may print a warning about packages with "install scripts". That's normal, and everything works without taking any action.
+
+> **Keep your party details private.** `event.config.json` holds your address and any notification emails. If your copy of the code will be **public** on GitHub, don't edit that file. Instead run `cp event.config.json event.config.local.json` and edit the copy. It's git-ignored, and every command uses it automatically when it exists. A private repository doesn't need this.
+
 ### 2. Describe your party
 
-Open `event.config.json` and change the example. The important fields:
+Open `event.config.json` (or your `event.config.local.json`) and change the example. It's plain JSON, so no comments and no trailing commas. If something's wrong, the build tells you which field and what it expected. The important fields:
 
 | Field | What it does |
 |---|---|
 | `theme` | `arcade`, `space`, `ocean`, `dino`, `confetti` or `magic` |
 | `honoree`, `age` | Headline: "Alex is turning 7". Leave out `age` (or use `null`) for a plain "Alex's party" headline |
 | `partyType` | Used in the subtitle and preview, e.g. `"video game party"`, `"pool party"` |
-| `date`, `start`, `end`, `timezone` | `2027-03-14`, `14:00`, `16:00`, and an [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York` |
+| `date`, `start`, `end`, `timezone` | `2027-03-14`, `14:00`, `16:00` (24-hour), and an [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) like `America/New_York`. A party that runs past midnight (`19:00` to `01:00`) works |
 | `venueName`, `address` | Shown on the page; the address links to Google Maps |
 | `locationShort` | Just the town, e.g. `"Springfield"`. Used in link previews so your full address isn't in them |
-| `plan` | The schedule, as `{ "time": "15:30", "text": "Pizza and cake." }` |
+| `plan` | The schedule: a list of `{ "time": "15:30", "text": "Pizza and cake." }` (24-hour times) |
 | `note` | A line under the schedule. `{end}` becomes the end time |
-| `food` | A list of choices ("Cheese", "Pepperoni"...), or remove the field to skip the question |
+| `food` | `{ "question": "Any pizza preferences?", "options": ["Cheese", "Pepperoni"] }`, or remove the field to skip the question |
 | `maxKids` | Highest number in the "how many kids" dropdown (max 10) |
-| `siteUrl` | Your live address. Fill this in after the first deploy (see step 4) |
+| `siteUrl` | Your live address, like `https://party.example.com` (no path). Leave it empty until after the first deploy (see step 4) |
 | `notify` | Optional email notifications (see [below](#email-notifications-optional)) |
 | `copy` | Override any wording, such as the kicker, button text, or confirmation messages |
 
@@ -75,7 +81,9 @@ cp .dev.vars.example .dev.vars    # sets a local admin passphrase
 npm run dev
 ```
 
-Open <http://localhost:8787>. The admin page is at <http://localhost:8787/admin> (passphrase from `.dev.vars`). Local RSVPs go into a throwaway local database.
+Open <http://localhost:8787>. The admin page is at <http://localhost:8787/admin> (passphrase from `.dev.vars`; that file is git-ignored and only for your computer). Local RSVPs go into a throwaway local database. Press Ctrl+C to stop.
+
+A first build prints a note that `siteUrl` is empty. That's expected until step 4.
 
 ### 4. Put it online
 
@@ -84,13 +92,21 @@ npx wrangler login                          # opens your browser, once
 npx wrangler d1 create party-rsvps          # creates the database; prints a database_id
 ```
 
-Copy the printed `database_id` into `wrangler.jsonc` (replace `REPLACE_WITH_YOUR_D1_ID`), then:
+If Wrangler asks whether to add the new database to your config, answer **no** (the config already has a slot for it). The output includes a block like this:
+
+```json
+{ "binding": "...", "database_name": "party-rsvps", "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" }
+```
+
+Copy the `database_id` value into `wrangler.jsonc`, replacing `REPLACE_WITH_YOUR_D1_ID`. Then:
 
 ```bash
 npm run db:migrate                          # creates the table in your database
 npx wrangler secret put ADMIN_PASSPHRASE    # type a passphrase; it's stored as a Cloudflare secret
 npm run deploy                              # builds the site, draws the preview image, deploys
 ```
+
+If any of the earlier steps was skipped, `npm run deploy` stops and tells you which one. Two things can come up on a brand-new Cloudflare account: `secret put` may ask whether to create the Worker first (say yes), and the first deploy may ask you to pick a free `workers.dev` subdomain.
 
 Wrangler prints your address, something like `https://party-invitation.<your-subdomain>.workers.dev`.
 
@@ -174,9 +190,9 @@ npm run check -- ocean    # just one theme
 
 It checks things that matter on phones: nothing scrolls sideways, pinch-zoom is locked while pull-to-refresh still works, the RSVP button never adds `#something` to the URL, the name field gets focus, "reduce motion" is respected, text stays readable (colour contrast), names are Title Cased, and the confirmation copy works for one child or several.
 
-It also builds the demo and tests it the way GitHub Pages serves it (under a sub-path): the theme switcher, a test RSVP, and the demo admin page.
+It also builds the demo and tests it the way GitHub Pages serves it (under a sub-path): the theme switcher, a test RSVP, and the demo admin page. And it confirms your own `event.config.json` builds. It needs Chrome or Edge, and takes about a minute for everything (a few seconds for one theme). The gallery images in `docs/previews` come from `npm run check -- --shots`, and always use the fictional example party, never your own config.
 
-Other scripts: `npm run build` (render `dist/`), `npm run build:fast` (skip the preview image), `npm run typecheck`.
+Other scripts: `npm run build` (render `dist/`), `npm run build:fast` (skip the preview image), `npm run typecheck`. The folders `dist/`, `demo/` and `.cache/` are generated and git-ignored.
 
 ## How it works
 
@@ -191,6 +207,17 @@ migrations/           the database table
 ```
 
 The invitation is static HTML, which is what link-preview crawlers need. They don't run JavaScript, so the title, description and image tags are written into the page at build time. The Worker handles only `/api/*`; Cloudflare serves everything else straight from `dist/`.
+
+## The RSVP API
+
+Handy if you want to build your own form. `POST /api/rsvp` with JSON:
+
+```json
+{ "child_name": "Sam", "parent_name": "Pat Lee", "attending": true, "num_kids": 1,
+  "parents_staying": false, "food_preference": "Cheese", "allergies": "", "notes": "" }
+```
+
+`child_name`, `parent_name` and `attending` are required. Sending the same two names again updates the earlier answer. The admin endpoints live under `/api/admin/` and need the login cookie.
 
 ## Good to know
 

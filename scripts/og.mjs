@@ -61,7 +61,7 @@ export async function renderImages({ theme, lines, bigText, partyType, dateLong,
     await page.evaluate(() => {
       const h = document.getElementById("h");
       let size = 82;
-      while ((h.scrollWidth > h.clientWidth + 1 || h.getBoundingClientRect().height > 260) && size > 36) h.style.fontSize = `${--size}px`;
+      while ((h.scrollWidth > h.clientWidth + 1 || h.getBoundingClientRect().height > 260) && size > 26) h.style.fontSize = `${--size}px`;
     });
     await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(outDir, "og.png"), clip: { x: 0, y: 0, width: 1200, height: 630 } });

@@ -35,7 +35,7 @@ export default {
   ],
   sprites: [
     pixelSprite({ pal: { a: "#ffd23f", b: "#c98a00", c: "#fff3a8" }, rows: ["..aaaa..", ".abccba.", "abcaabba", "abcaabba", "abcaabba", "abcaabba", ".abbbba.", "..aaaa.."] }),
-    pixelSprite({ pal: { a: "#39ff88" }, rows: ["..a....a..", "...a..a...", "..aaaaaa..", ".aa.aa.aa.", "aaaaaaaaaa", "a.aaaaaa.a", "a.a....a.a", "...aa.aa.."] }),
+    pixelSprite({ pal: { a: "#39ff88", b: "#10102e" }, rows: [".a.....a.", "..a...a..", "..aaaaa..", ".aabaabaa", "aaaaaaaaa", ".aaaaaaa.", "..a.a.a..", ".a..a..a."] }),
     pixelSprite({ pal: { a: "#ff4fa3", b: "#fff" }, rows: [".aa..aa.", "aabaaaaa", "aaaaaaaa", "aaaaaaaa", ".aaaaaa.", "..aaaa..", "...aa..."] }),
     pixelSprite({ pal: { a: "#41e0ff", b: "#10102e", c: "#ff4fa3" }, rows: [".aaaaaaaaaaaa.", "aaaaaaaaaaaaaa", "aabaaaaaaacaaa", "abbbaaaaaaaaca", "aabaaaaaacaaaa", "aaaaaaaaaaaaaa", ".aaa......aaa."] }),
   ],

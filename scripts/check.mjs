@@ -57,13 +57,22 @@ let failures = 0;
 const fail = (theme, msg) => { failures++; console.log(`  FAIL  ${msg}`); };
 const ok = (msg) => console.log(`  ok    ${msg}`);
 
+// Your own config: does it build? (written to .cache only; never to docs/)
+try {
+  await build({ out: path.join(root, ".cache", "check", "_yours"), "skip-og": true });
+  ok("your event config builds");
+} catch (e) {
+  fail("config", `your event config doesn't build: ${e.message}`);
+}
+
 const browser = await launch();
 try {
   for (const id of themes) {
     console.log(`\n${id}`);
     const out = path.join(root, ".cache", "check", id);
     const example = (await import(pathToFileURL(path.join(root, "themes", `${id}.mjs`)).href)).default.example || {};
-    const { theme, ogFile } = await build({ theme: id, out, overrides: example });
+    // always the fictional demo config, so previews written to docs/previews can never contain a real party
+    const { theme, ogFile } = await build({ theme: id, out, config: "scripts/demo.config.json", overrides: example });
     const v = theme.vars;
     const server = await serve(out);
     const base = `http://127.0.0.1:${server.address().port}`;

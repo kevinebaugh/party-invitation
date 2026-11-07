@@ -9,10 +9,10 @@
     "build": "node scripts/build.mjs",
     "build:fast": "node scripts/build.mjs --skip-og",
     "dev": "npm run build:fast && wrangler d1 migrations apply party-rsvps --local && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "node scripts/preflight.mjs && npm run build && wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply party-rsvps --remote",
     "check": "node scripts/check.mjs",
-    "typecheck": "tsc -p .",
+    "typecheck": "npm run build:fast && tsc -p .",
     "build:demo": "node scripts/build-demo.mjs",
     "deploy:demo": "npm run build:demo && wrangler deploy --config wrangler.demo.jsonc"
   },
@@ -21,5 +21,8 @@
     "playwright-core": "^1.65.0",
     "typescript": "^7.0.2",
     "wrangler": "^4.158.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

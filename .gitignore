@@ -6,3 +6,4 @@ node_modules
 .dev.vars
 .DS_Store
 src/config.generated.json
+event.config.local.json

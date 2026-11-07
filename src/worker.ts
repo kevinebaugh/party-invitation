@@ -131,7 +131,7 @@ export default {
       const b = (await req.json().catch(() => ({}))) as { passphrase?: string };
       if (!env.ADMIN_PASSPHRASE || !safeEqual(String(b.passphrase ?? ""), env.ADMIN_PASSPHRASE)) return json({ error: "Nope" }, 401);
       return json({ ok: true }, 200, {
-        "set-cookie": `party_admin=${await sign(env, "admin-v1")}; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
+        "set-cookie": `party_admin=${await sign(env, "admin-v1")}; Path=/api/admin; HttpOnly;${url.protocol === "https:" ? " Secure;" : ""} SameSite=Strict; Max-Age=2592000`,
       });
     }
 
