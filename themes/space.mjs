@@ -4,7 +4,15 @@ export default {
   id: "space",
   name: "Space",
   blurb: "Rockets, ringed planets and a moonlit horizon for little astronauts.",
-  example: { partyType: "space party" },
+  example: {
+    partyType: "space party",
+    plan: [
+      { time: "14:00", text: "Countdown! Build and decorate your own cardboard rocket." },
+      { time: "15:30", text: "Snacks and cake." },
+      { time: "16:00", text: "Landing time. Thanks for flying with us!" },
+    ],
+    note: "Feel free to drop off your astronaut and pick them up at {end}.",
+  },
   fonts: { display: "Orbitron", url: "family=Orbitron:wght@700;900&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#070722", "--sky": "linear-gradient(#04041a,#14104a 55%,#3a1a6e 100%)",

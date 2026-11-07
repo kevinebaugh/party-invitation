@@ -89,7 +89,7 @@ export async function build(opts = {}) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}`;
   const siteUrl = c.siteUrl;
   const abs = (p) => (siteUrl ? `${siteUrl}${p}` : p);
-  if (!siteUrl) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
+  if (!siteUrl && !o.demo) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
 
   const hue = theme.hue || theme.confetti.filter((x) => !/^#f{3}(f{3})?$/i.test(x));
   const ogHash = crypto.createHash("sha256").update(JSON.stringify({
@@ -284,7 +284,18 @@ ${c.footer ? `  <footer>${esc(c.footer)}</footer>\n` : ""}</main>
   // ---- write ----
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(path.join(out, "admin"), { recursive: true });
-  fs.writeFileSync(path.join(out, "index.html"), html);
+  let pageHtml = html;
+  if (o.demo) {
+    // Demo build: relative URLs so it works under any base path (e.g. GitHub Pages), and the fake API shim.
+    pageHtml = html
+      .replace('href="/style.css"', 'href="style.css"').replace('src="/app.js"', 'src="app.js"')
+      .replace('href="/party.ics"', 'href="party.ics"').replace('href="/favicon.svg"', 'href="favicon.svg"')
+      .replace(/<link rel="apple-touch-icon"[^>]*>\n/, "")
+      .replace(/<meta property="og:image[^>]*>\n/g, "").replace(/<meta name="twitter:image"[^>]*>\n/, "")
+      .replace("<title>", "<title>Demo: ")
+      .replace('<script src="app.js">', '<script src="../shim.js"></script>\n<script src="app.js">');
+  }
+  fs.writeFileSync(path.join(out, "index.html"), pageHtml);
   fs.writeFileSync(path.join(out, "style.css"), css);
   fs.copyFileSync(path.join(root, "src/template/app.js"), path.join(out, "app.js"));
   fs.writeFileSync(path.join(out, "party.ics"), ics);
@@ -305,12 +316,12 @@ ${c.footer ? `  <footer>${esc(c.footer)}</footer>\n` : ""}</main>
     const { renderImages } = await import("./og.mjs");
     await renderImages({ theme, lines, bigText, partyType, dateLong, range, locationShort: c.locationShort || "", iconSvg: iconSvg(180), outDir: cacheDir });
   }
-  if (fs.existsSync(path.join(cacheDir, "og.png"))) {
+  if (!o.demo && fs.existsSync(path.join(cacheDir, "og.png"))) {
     fs.copyFileSync(path.join(cacheDir, "og.png"), path.join(out, ogFile));
     fs.copyFileSync(path.join(cacheDir, "apple-touch-icon.png"), path.join(out, "apple-touch-icon.png"));
   } else if (wantOg) {
     throw new Error("Preview image was not generated.");
-  } else {
+  } else if (!o.demo) {
     console.warn("! Skipped the preview image (--skip-og). Run `npm run build` before sharing the link.");
   }
 

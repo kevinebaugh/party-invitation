@@ -11,6 +11,21 @@ Guests get one link to text or email. They see the invitation, add it to their c
 
 (The images above are the link previews guests see in iMessage, WhatsApp, Slack and email. Alex and the address are made up.)
 
+## Live demo
+
+A static demo lets people flip between all six themes, send a test RSVP, and use the real admin page. A bar at the top switches themes and keeps your scroll position. It has no server: a small script in the page pretends to be the backend, with a few made-up guests stored only in the visitor's own browser. Nothing is shared between visitors or sent anywhere. The admin passphrase in the demo is `demo`, and a "Reset demo data" button starts over.
+
+```bash
+npm run build:demo        # writes demo/
+npx wrangler dev --config wrangler.demo.jsonc    # or any static file server, to look at it
+```
+
+The demo always builds from `scripts/demo.config.json` (the fictional "Alex"), never from your `event.config.json`, so your real party details can't end up in it.
+
+**Host it on GitHub Pages (free).** Make the repository public, then go to **Settings → Pages → Source: GitHub Actions**. The included workflow (`.github/workflows/demo.yml`) rebuilds and publishes the demo on every push to `main`, at `https://<you>.github.io/<repo>/`. (Pages on a private repository needs a paid GitHub plan.)
+
+**Or host it on Cloudflare (free).** `npm run deploy:demo` publishes it as its own static site, `party-invitation-demo`, with no database or secrets.
+
 **What you get**
 
 - Six themes with parallax backgrounds and playful animation (and full support for "reduce motion").
@@ -159,6 +174,8 @@ npm run check -- ocean    # just one theme
 
 It checks things that matter on phones: nothing scrolls sideways, pinch-zoom is locked while pull-to-refresh still works, the RSVP button never adds `#something` to the URL, the name field gets focus, "reduce motion" is respected, text stays readable (colour contrast), names are Title Cased, and the confirmation copy works for one child or several.
 
+It also builds the demo and tests it the way GitHub Pages serves it (under a sub-path): the theme switcher, a test RSVP, and the demo admin page.
+
 Other scripts: `npm run build` (render `dist/`), `npm run build:fast` (skip the preview image), `npm run typecheck`.
 
 ## How it works
@@ -169,6 +186,7 @@ themes/<theme>.mjs    colours, fonts, parallax layers, sprites, flavour text
 src/template/         shared page layout, styles and script (themes plug into these)
 scripts/build.mjs     renders dist/ (static HTML/CSS/JS, calendar file, preview image)
 src/worker.ts         the API: RSVP, admin login, edit/delete/restore
+scripts/build-demo.mjs  the static demo (themes + switcher + fake in-browser backend, src/demo/)
 migrations/           the database table
 ```
 

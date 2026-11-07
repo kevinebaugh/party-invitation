@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { build, THEMES } from "./build.mjs";
 import { launch } from "./og.mjs";
@@ -183,6 +184,70 @@ try {
 
     await ctx.close();
     server.close();
+  }
+
+  // ---- the static demo (themes + switcher + fake in-browser backend), served under a sub-path like GitHub Pages ----
+  if (!only.length) {
+    console.log("\ndemo");
+    execFileSync(process.execPath, [path.join(root, "scripts", "build-demo.mjs")], { stdio: "ignore" });
+    const demoDir = path.join(root, "demo");
+    const srv = http.createServer((req, res) => {
+      const u = new URL(req.url, "http://x");
+      if (!u.pathname.startsWith("/pi/")) { res.statusCode = 404; return res.end(); }
+      let p = u.pathname.slice(3);
+      if (p.endsWith("/")) p += "index.html";
+      const file = path.join(demoDir, p);
+      if (!file.startsWith(demoDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.statusCode = 404; return res.end(); }
+      res.setHeader("content-type", MIME[path.extname(file)] || "application/octet-stream");
+      res.end(fs.readFileSync(file));
+    });
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const base = `http://127.0.0.1:${srv.address().port}/pi`;
+    const dctx = await browser.newContext({ viewport: { width: 375, height: 812 }, reducedMotion: "reduce" });
+    const d = await dctx.newPage();
+    const derrors = [];
+    d.on("pageerror", (e) => derrors.push(e.message));
+    await d.goto(`${base}/arcade/`, { waitUntil: "networkidle" });
+    const chips = await d.$$eval(".demo-bar a", (as) => as.map((a) => a.textContent.trim()));
+    chips.length === THEMES.length + 1 && THEMES.every((t) => chips.some((c) => c.toLowerCase() === t)) ? ok(`switcher lists all ${THEMES.length} themes + admin`) : fail("demo", `chips: ${chips}`);
+    (await d.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== "rgba(0, 0, 0, 0)" ? ok("works under a sub-path (styles load)") : fail("demo", "styles didn't load under /pi/");
+
+    await d.evaluate(() => window.scrollTo(0, 600));
+    await d.locator(".demo-bar a", { hasText: "Ocean" }).click();
+    await d.waitForURL(/\/ocean\/$/);
+    await d.waitForLoadState("load");
+    await d.waitForTimeout(300);
+    const y = await d.evaluate(() => Math.round(scrollY));
+    Math.abs(y - 600) < 40 ? ok(`theme switch keeps scroll position (${y}px)`) : fail("demo", `scroll after switch: ${y}`);
+
+    await d.evaluate(() => localStorage.removeItem("party-demo-v1"));
+    await d.fill("input[name=child_name]", "riley and kai");
+    await d.fill("input[name=parent_name]", "sam ortiz");
+    await d.check("input[name=attending][value=yes]");
+    await d.locator("#rsvp-form button[type=submit]").click();
+    await d.waitForSelector("#done:not([hidden])", { timeout: 4000 }).catch(() => {});
+    (await d.evaluate(() => !document.getElementById("done").hidden)) ? ok("demo RSVP is accepted by the fake backend") : fail("demo", "RSVP not confirmed");
+
+    await d.goto(`${base}/admin/`, { waitUntil: "networkidle" });
+    await d.fill("#pw", "nope"); await d.locator("#login button").click();
+    await d.waitForFunction(() => document.getElementById("err").textContent.length > 0);
+    ok("admin rejects a wrong passphrase");
+    await d.fill("#pw", "demo"); await d.locator("#login button").click();
+    await d.waitForSelector("#list:not([hidden])");
+    const names = await d.$$eval("#rows tr .name, #rows tr td:first-child", (els) => els.map((e) => e.textContent));
+    names.some((n) => /Riley And Kai/.test(n)) ? ok("the RSVP just sent shows up in the demo admin (names Title Cased)") : fail("demo", `admin rows: ${names}`);
+
+    const tabs = () => d.evaluate(() => [document.getElementById("tab-active").textContent, document.getElementById("tab-deleted").textContent]);
+    const before = await tabs();
+    await d.locator("[data-del]").first().click();
+    await d.waitForFunction((t) => document.getElementById("tab-deleted").textContent !== t, before[1]);
+    await d.locator("#tab-deleted").click();
+    await d.locator("[data-restore]").first().click();
+    await d.waitForTimeout(500);
+    const restored = await tabs();
+    restored[0] === before[0] && restored[1] === before[1] ? ok("soft delete and restore work in the demo admin") : fail("demo", `tabs ${before} -> ${restored}`);
+    derrors.length ? fail("demo", `page errors: ${derrors.join("; ")}`) : ok("no page errors");
+    await dctx.close(); srv.close();
   }
 } finally {
   await browser.close();

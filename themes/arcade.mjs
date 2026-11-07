@@ -4,7 +4,15 @@ export default {
   id: "arcade",
   name: "Arcade",
   blurb: "8-bit video game night: pixel fonts, coins, aliens and controllers.",
-  example: { partyType: "video game party" },
+  example: {
+    partyType: "video game party",
+    plan: [
+      { time: "14:00", text: "Players arrive! A video game truck pulls up. Big screens, rumbling seats, and multiplayer games for everyone." },
+      { time: "15:30", text: "Pizza and cake." },
+      { time: "16:00", text: "Pickup time. Thanks for playing!" },
+    ],
+    note: "Feel free to drop off your gamer and pick them up at {end}.",
+  },
   fonts: { display: "Pixelify Sans", url: "family=Pixelify+Sans:wght@700&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#12123a", "--sky": "linear-gradient(#0b0b2b,#2a1b6e 55%,#6b2a8f 100%)",

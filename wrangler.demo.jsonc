@@ -1,0 +1,6 @@
+{
+  // Static-only deployment of the demo (npm run deploy:demo). No database, no secrets.
+  "name": "party-invitation-demo",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./demo" }
+}

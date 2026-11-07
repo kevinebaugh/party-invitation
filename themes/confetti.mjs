@@ -6,7 +6,15 @@ export default {
   id: "confetti",
   name: "Confetti",
   blurb: "Bright, classic birthday: balloons, bunting, cake and falling confetti.",
-  example: { partyType: "birthday party" },
+  example: {
+    partyType: "birthday party",
+    plan: [
+      { time: "14:00", text: "Games, music and party fun." },
+      { time: "15:30", text: "Pizza and cake." },
+      { time: "16:00", text: "Pickup time. Thanks for celebrating!" },
+    ],
+    note: "Feel free to drop off your guest and pick them up at {end}.",
+  },
   fonts: { display: "Fredoka", url: "family=Fredoka:wght@600&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#fff3dc", "--sky": "linear-gradient(#fff7e6,#ffe3ee 60%,#ffd2e6 100%)",

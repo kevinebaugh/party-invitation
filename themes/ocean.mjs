@@ -4,7 +4,15 @@ export default {
   id: "ocean",
   name: "Ocean",
   blurb: "Bubbles, fish and rolling waves for an under-the-sea party.",
-  example: { partyType: "ocean party" },
+  example: {
+    partyType: "ocean party",
+    plan: [
+      { time: "14:00", text: "Dive in! Crafts, treasure hunt and games under the sea." },
+      { time: "15:30", text: "Snacks and cake." },
+      { time: "16:00", text: "Back to shore. Thanks for swimming by!" },
+    ],
+    note: "Feel free to drop off your little mermaid or sailor and pick them up at {end}.",
+  },
   fonts: { display: "Lilita One", url: "family=Lilita+One&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#0b4a73", "--sky": "linear-gradient(#0a3d62,#1478b5 55%,#35b6d6 100%)",

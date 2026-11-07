@@ -4,7 +4,15 @@ export default {
   id: "dino",
   name: "Dino",
   blurb: "A sunny prehistoric jungle with dinosaurs, eggs and a volcano.",
-  example: { partyType: "dino party" },
+  example: {
+    partyType: "dino party",
+    plan: [
+      { time: "14:00", text: "Fossil dig and dinosaur games." },
+      { time: "15:30", text: "Pizza and cake." },
+      { time: "16:00", text: "Time to head home. Thanks for stomping by!" },
+    ],
+    note: "Feel free to drop off your explorer and pick them up at {end}.",
+  },
   fonts: { display: "Chewy", url: "family=Chewy&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#e9d98a", "--sky": "linear-gradient(#fde68a,#d9e79a 45%,#8cc56b 100%)",

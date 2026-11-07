@@ -1,0 +1,45 @@
+{
+  "theme": "arcade",
+  "siteUrl": "",
+  "honoree": "Alex",
+  "age": 7,
+  "partyType": "video game party",
+  "date": "2027-03-14",
+  "start": "14:00",
+  "end": "16:00",
+  "timezone": "America/New_York",
+  "venueName": "Alex's house",
+  "address": "123 Example Street, Springfield, ST 00000",
+  "locationShort": "Springfield",
+  "plan": [
+    {
+      "time": "14:00",
+      "text": "Players arrive! A video game truck pulls up. Big screens, rumbling seats, and multiplayer games for everyone."
+    },
+    {
+      "time": "15:30",
+      "text": "Pizza and cake."
+    },
+    {
+      "time": "16:00",
+      "text": "Pickup time. Thanks for playing!"
+    }
+  ],
+  "note": "Feel free to drop off your gamer and pick them up at {end}.",
+  "maxKids": 5,
+  "food": {
+    "question": "Any pizza preferences?",
+    "options": [
+      "Cheese",
+      "Pepperoni",
+      "Hawaiian (controversial)",
+      "Anything is fine"
+    ]
+  },
+  "footer": "Demo \u00b7 built with party-invitation",
+  "notify": {
+    "to": [],
+    "from": ""
+  },
+  "copy": {}
+}

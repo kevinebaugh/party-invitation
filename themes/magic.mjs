@@ -6,7 +6,15 @@ export default {
   id: "magic",
   name: "Magic",
   blurb: "Pastel skies, rainbows, sparkles and clouds. Dreamy and unicorn-friendly.",
-  example: { partyType: "unicorn party" },
+  example: {
+    partyType: "unicorn party",
+    plan: [
+      { time: "14:00", text: "Crown decorating, glitter tattoos and rainbow games." },
+      { time: "15:30", text: "Snacks and cake." },
+      { time: "16:00", text: "Pickup time. Thanks for the magic!" },
+    ],
+    note: "Feel free to drop off your unicorn and pick them up at {end}.",
+  },
   fonts: { display: "Baloo 2", url: "family=Baloo+2:wght@700&family=Nunito:wght@600;800" },
   vars: {
     "--bg": "#d9c8ff", "--sky": "linear-gradient(#ffd6f6,#cdb8ff 50%,#a5e3ff 100%)",
