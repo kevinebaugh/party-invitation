@@ -35,7 +35,8 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
       - name: Build demo
-        run: DEMO_URL="${{ steps.pages.outputs.base_url }}" npm run build:demo
+        # Pages can report an http:// address; link previews (iMessage) need https
+        run: DEMO_URL="$(echo '${{ steps.pages.outputs.base_url }}' | sed 's#^http://#https://#')" npm run build:demo
       - uses: actions/upload-pages-artifact@v3
         with:
           path: demo
