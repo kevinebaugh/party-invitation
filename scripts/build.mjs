@@ -94,6 +94,10 @@ function loadConfig(o) {
   if (c.food && (!Array.isArray(c.food.options) || c.food.options.some((x) => typeof x !== "string" || !x.trim()))) {
     throw new Error('"food.options" must be a list of text choices, like ["Cheese", "Pepperoni"].');
   }
+  const comma = (c.food?.options || []).find((x) => x.includes(","));
+  if (comma) {
+    throw new Error(`"food.options" can't contain commas ("${comma}"), because commas separate the items a guest ticks and the admin totals would split it in two. Use a dash or "and" instead, like "Mac - extra cheesy".`);
+  }
   if (o.theme) c.theme = o.theme;
   if (!THEMES.includes(c.theme)) throw new Error(`Unknown theme "${c.theme}". Available: ${THEMES.join(", ")}`);
   c.siteUrl = String(c.siteUrl || "").trim().replace(/\/+$/, "");

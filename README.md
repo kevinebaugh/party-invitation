@@ -72,7 +72,7 @@ Open `event.config.json` (or your `event.config.local.json`) and change the exam
 | `locationShort` | Just the town, e.g. `"Springfield"`. Used in link previews so your full address isn't in them |
 | `plan` | The schedule: a list of `{ "time": "15:30", "text": "Pizza and cake." }` (24-hour times) |
 | `note` | A line under the schedule. `{end}` becomes the end time |
-| `food` | `{ "question": "Any pizza preferences?", "options": ["Cheese", "Pepperoni"] }`, or remove the field to skip the question |
+| `food` | Your food question. `{ "label": "Pizza", "question": "Any pizza preferences?", "options": ["Cheese", "Pepperoni"] }`. `question` is what guests see, `options` are the tick boxes, and `label` (default "Food") names the column in the admin page and the row in notification emails. Options can be anything (snacks, ice cream flavours, cake...) but can't contain commas. Remove the field to skip the question |
 | `maxKids` | Highest number in the "how many kids" dropdown (max 10) |
 | `siteUrl` | Your live address, like `https://party.example.com` (no path). Leave it empty until after the first deploy (see step 4) |
 | `notify` | Optional email notifications (see [below](#email-notifications-optional)) |
