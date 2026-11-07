@@ -252,7 +252,8 @@ try {
     await d.waitForFunction((t) => document.getElementById("tab-deleted").textContent !== t, before[1]);
     await d.locator("#tab-deleted").click();
     await d.locator("[data-restore]").first().click();
-    await d.waitForTimeout(500);
+    // wait for the restore to land (it makes two fake network calls), instead of sleeping a fixed time
+    await d.waitForFunction((t) => document.getElementById("tab-deleted").textContent === t, before[1], { timeout: 5000 }).catch(() => {});
     const restored = await tabs();
     restored[0] === before[0] && restored[1] === before[1] ? ok("soft delete and restore work in the demo admin") : fail("demo", `tabs ${before} -> ${restored}`);
     derrors.length ? fail("demo", `page errors: ${derrors.join("; ")}`) : ok("no page errors");
