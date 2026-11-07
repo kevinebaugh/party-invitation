@@ -72,7 +72,7 @@ Open `event.config.json` (or your `event.config.local.json`) and change the exam
 | `locationShort` | Just the town, e.g. `"Springfield"`. Used in link previews so your full address isn't in them |
 | `plan` | The schedule: a list of `{ "time": "15:30", "text": "Pizza and cake." }` (24-hour times) |
 | `note` | A line under the schedule. `{end}` becomes the end time |
-| `food` | Your food question. `{ "label": "Pizza", "question": "Any pizza preferences?", "options": ["Cheese", "Pepperoni"] }`. `question` is what guests see, `options` are the tick boxes, and `label` (default "Food") names the column in the admin page and the row in notification emails. Options can be anything (snacks, ice cream flavours, cake...) but can't contain commas. Remove the field to skip the question |
+| `food` | Your food question. `{ "label": "Pizza", "question": "Any pizza preferences?", "options": ["Cheese", "Pepperoni"], "multiple": true, "other": true }`. `question` is what guests see and `options` are the choices. `multiple` is `true` to tick any (the default) or `false` to pick one (a "No preference" choice is added). `other` adds a write-in box: `true` for "Something else", or your own text like `"Something different"`. `label` (default "Food") names the column in the admin page and the row in notification emails. Options can be anything (snacks, ice cream flavours, cake...) but can't contain commas. In the admin totals, write-ins are grouped as "Other". Remove the field to skip the question |
 | `maxKids` | Highest number in the "how many kids" dropdown (max 10) |
 | `siteUrl` | Your live address, like `https://party.example.com` (no path). Leave it empty until after the first deploy (see step 4) |
 | `notify` | Optional email notifications (see [below](#email-notifications-optional)) |
@@ -221,7 +221,7 @@ Handy if you want to build your own form. `POST /api/rsvp` with JSON:
   "parents_staying": false, "food_preference": "Cheese", "allergies": "", "notes": "" }
 ```
 
-`child_name`, `parent_name` and `attending` are required. Sending the same two names again updates the earlier answer. The admin endpoints live under `/api/admin/` and need the login cookie.
+`child_name`, `parent_name` and `attending` are required. `food_preference` is the guest's choices separated by commas, like `"Cheese, Pepperoni"`. Sending the same two names again updates the earlier answer. The admin endpoints live under `/api/admin/` and need the login cookie.
 
 ## Good to know
 

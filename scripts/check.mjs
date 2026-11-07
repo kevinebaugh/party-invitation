@@ -195,6 +195,72 @@ try {
     server.close();
   }
 
+  // ---- food question: tick-any / pick-one, and the "Something else" write-in ----
+  if (!only.length) {
+    console.log("\nfood options");
+    const options = ["Cheese", "Pepperoni", "Mac - extra cheesy"];
+    const scenarios = [
+      { name: "tick-any with write-in", food: { question: "Any snacks?", options, multiple: true, other: true } },
+      { name: "pick-one with write-in", food: { question: "Which flavour?", options, multiple: false, other: "Something different" } },
+    ];
+    for (const [i, sc] of scenarios.entries()) {
+      const outDir = path.join(root, ".cache", "check", `_food${i}`);
+      await build({ config: "scripts/demo.config.json", theme: "arcade", out: outDir, "skip-og": true, overrides: { food: sc.food } });
+      const srv = await serve(outDir);
+      const fctx = await browser.newContext({ viewport: { width: 375, height: 812 }, reducedMotion: "reduce" });
+      const fp = await fctx.newPage();
+      let sent = null;
+      await fp.route("**/api/rsvp", (route) => { sent = JSON.parse(route.request().postData()); route.fulfill({ json: { ok: true, attending: true } }); });
+      await fp.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "networkidle" });
+      await fp.fill("input[name=child_name]", "Sam"); await fp.fill("input[name=parent_name]", "Pat");
+      await fp.check("input[name=attending][value=yes]");
+      const kind = await fp.$eval('input[name=food][value="Cheese"]', (e) => e.type);
+      kind === (sc.food.multiple ? "checkbox" : "radio") ? ok(`${sc.name}: options are ${kind === "checkbox" ? "checkboxes" : "radios"}`) : fail("food", `${sc.name}: options are ${kind}`);
+      const ph = await fp.$eval("input[name=food_other]", (e) => e.placeholder);
+      ph === (sc.food.other === true ? "Something else" : sc.food.other) ? ok(`${sc.name}: write-in label "${ph}"`) : fail("food", `${sc.name}: write-in label "${ph}"`);
+
+      if (sc.food.multiple) {
+        await fp.check('input[name=food][value="Cheese"]');
+        await fp.fill("input[name=food_other]", "gluten free, dairy free");
+        (await fp.isChecked('input[name=food][value="__other__"]')) ? ok("typing in the write-in ticks it") : fail("food", "write-in didn't tick itself");
+        await fp.uncheck('input[name=food][value="__other__"]');
+        (await fp.inputValue("input[name=food_other]")) === "" ? ok("un-ticking the write-in clears it") : fail("food", "write-in text stayed after un-ticking");
+        await fp.check('input[name=food][value="__other__"]');
+        (await fp.evaluate(() => document.activeElement.name)) === "food_other" ? ok("ticking the write-in focuses its box") : fail("food", "write-in box not focused");
+        await fp.fill("input[name=food_other]", "gluten free, dairy free");
+        await fp.locator("#rsvp-form button[type=submit]").click();
+        await fp.waitForFunction(() => !document.getElementById("done").hidden);
+        sent?.food_preference === "Cheese, gluten free / dairy free" ? ok("saved answer lists ticked items + write-in, commas in the write-in replaced") : fail("food", `saved: ${JSON.stringify(sent?.food_preference)}`);
+      } else {
+        (await fp.isChecked('input[name=food][value=""]')) ? ok('"No preference" is selected by default') : fail("food", "no default selection");
+        await fp.check('input[name=food][value="Pepperoni"]');
+        await fp.fill("input[name=food_other]", "just plain");
+        const still = await fp.isChecked('input[name=food][value="Pepperoni"]');
+        !still && (await fp.isChecked('input[name=food][value="__other__"]')) ? ok("typing a write-in switches away from the other choice") : fail("food", "write-in didn't replace the radio choice");
+        await fp.locator("#rsvp-form button[type=submit]").click();
+        await fp.waitForFunction(() => !document.getElementById("done").hidden);
+        sent?.food_preference === "just plain" ? ok("pick-one saves just the write-in") : fail("food", `saved: ${JSON.stringify(sent?.food_preference)}`);
+      }
+      await fctx.close(); srv.close();
+    }
+    // default-selected "No preference" saves nothing
+    {
+      const outDir = path.join(root, ".cache", "check", "_food1");
+      const srv = await serve(outDir);
+      const fctx = await browser.newContext({ viewport: { width: 375, height: 812 }, reducedMotion: "reduce" });
+      const fp = await fctx.newPage();
+      let sent = null;
+      await fp.route("**/api/rsvp", (route) => { sent = JSON.parse(route.request().postData()); route.fulfill({ json: { ok: true, attending: true } }); });
+      await fp.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "networkidle" });
+      await fp.fill("input[name=child_name]", "Sam"); await fp.fill("input[name=parent_name]", "Pat");
+      await fp.check("input[name=attending][value=yes]");
+      await fp.locator("#rsvp-form button[type=submit]").click();
+      await fp.waitForFunction(() => !document.getElementById("done").hidden);
+      sent?.food_preference === "" ? ok('pick-one left on "No preference" saves nothing') : fail("food", `saved: ${JSON.stringify(sent?.food_preference)}`);
+      await fctx.close(); srv.close();
+    }
+  }
+
   // ---- the static demo (themes + switcher + fake in-browser backend), served under a sub-path like GitHub Pages ----
   if (!only.length) {
     console.log("\ndemo");
@@ -245,6 +311,8 @@ try {
     await d.waitForSelector("#list:not([hidden])");
     const names = await d.$$eval("#rows tr .name, #rows tr td:first-child", (els) => els.map((e) => e.textContent));
     names.some((n) => /Riley And Kai/.test(n)) ? ok("the RSVP just sent shows up in the demo admin (names Title Cased)") : fail("demo", `admin rows: ${names}`);
+    const stats = await d.$eval("#stats", (e) => e.innerText);
+    /Pizza:/.test(stats) && /Other ×1/.test(stats) ? ok("admin totals group write-in answers under \"Other\"") : fail("demo", `stats: ${stats.replace(/\n/g, " ")}`);
 
     const tabs = () => d.evaluate(() => [document.getElementById("tab-active").textContent, document.getElementById("tab-deleted").textContent]);
     const before = await tabs();

@@ -91,7 +91,7 @@ dialog label.row{display:flex;gap:8px;align-items:center}
     <label>Coming?<select name="attending"><option value="yes">Yes</option><option value="no">No</option></select></label>
     <label>Kids coming<input name="num_kids" type="number" min="1" max="{{maxKids}}"></label>
     <label class="row"><input name="parents_staying" type="checkbox"> A grown-up is staying</label>
-    <label>{{foodLabel}} (comma separated)<input name="food_preference" maxlength="160"></label>
+    <label>{{foodLabel}} (comma separated)<input name="food_preference" maxlength="300"></label>
     <label>Allergies / dietary<input name="allergies" maxlength="200"></label>
     <label>Notes<textarea name="notes" maxlength="500" rows="2"></textarea></label>
     <p id="eerr"></p>
@@ -122,8 +122,9 @@ function render() {
   $("tab-deleted").classList.toggle("on", view === "deleted");
   const shown = view === "active" ? live : gone;
   const yes = live.filter((x) => x.attending);
+  const FOOD_OPTIONS = {{foodOptions}};
   const food = {};
-  yes.forEach((x) => (x.food_preference || "").split(",").map((s) => s.trim()).filter(Boolean).forEach((p) => { food[p] = (food[p] || 0) + 1; }));
+  yes.forEach((x) => (x.food_preference || "").split(",").map((s) => s.trim()).filter(Boolean).forEach((p) => { const k = FOOD_OPTIONS.includes(p) ? p : "Other"; food[k] = (food[k] || 0) + 1; }));
   $("stats").hidden = view !== "active";
   $("stats").innerHTML =
     `<div class=stat><b>${yes.reduce((n, x) => n + (x.num_kids || 1), 0)}</b>kids coming</div><div class=stat><b>${yes.length}</b>families yes</div>` +

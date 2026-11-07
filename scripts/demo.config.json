@@ -34,7 +34,10 @@
       "Pepperoni",
       "Hawaiian (controversial)",
       "Anything is fine"
-    ]
+    ],
+    "label": "Pizza",
+    "multiple": true,
+    "other": true
   },
   "footer": "Demo \u00b7 built with party-invitation",
   "notify": {

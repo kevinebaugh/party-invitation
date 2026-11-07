@@ -107,6 +107,26 @@
   [form.child_name, form.parent_name].forEach((el) =>
     el.addEventListener("blur", () => { el.value = titleCase(el.value.trim()); refreshLabels(); }));
 
+  // "Something else" write-in: typing selects it, picking it focuses the box, un-ticking clears it
+  const otherPick = form.querySelector('input[name=food][value="__other__"]');
+  const otherText = form.elements.food_other;
+  if (otherPick && otherText) {
+    otherText.addEventListener("input", () => { if (otherText.value.trim()) otherPick.checked = true; });
+    form.addEventListener("change", (e) => {
+      if (e.target.name !== "food") return;
+      if (otherPick.checked) { if (e.target === otherPick) otherText.focus({ preventScroll: true }); }
+      else otherText.value = "";
+    });
+  }
+  const chosenFood = (f) => {
+    const picked = f.getAll("food");
+    const items = picked.filter((v) => v && v !== "__other__");
+    // commas separate items in the saved answer (and the admin totals), so a write-in can't contain them
+    const other = picked.includes("__other__") ? String(f.get("food_other") || "").replace(/\s*,\s*/g, " / ").replace(/\s+/g, " ").trim() : "";
+    if (other) items.push(other);
+    return items.join(", ");
+  };
+
   form.addEventListener("change", () => { yesOnly.hidden = form.attending.value !== "yes"; });
   document.getElementById("again").addEventListener("click", () => { done.hidden = true; form.hidden = false; });
 
@@ -129,7 +149,7 @@
           child_name: titleCase(f.get("child_name")), parent_name: titleCase(f.get("parent_name")),
           attending: attending === "yes", parents_staying: !f.get("dropping_off"),
           num_kids: +f.get("num_kids") || 1,
-          food_preference: f.getAll("food").join(", "), allergies: f.get("allergies"),
+          food_preference: chosenFood(f), allergies: f.get("allergies"),
           notes: f.get("notes"), website: f.get("website"),
         }),
       });

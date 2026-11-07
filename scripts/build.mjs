@@ -39,6 +39,7 @@ const DEFAULT_COPY = {
   dropoff: "We'll drop off {name} and pick them up at {end}", dropoffDefaultName: "our child",
   allergies: "(Optional) Any allergies or dietary restrictions?",
   notes: "Anything else?", optional: "Optional",
+  foodOther: "Something else", foodNone: "No preference",
   doneYesTitle: "See you there!", doneYesText: "You're on the list! We'll see {name} on {date} at {start}.",
   doneNoTitle: "Thanks for letting us know", doneNoText: "We'll miss {name}! Thanks for letting us know.",
   errorMissing: "Please add both names and pick yes or no.", errorGeneric: "Something went wrong. Please try again.",
@@ -94,6 +95,10 @@ function loadConfig(o) {
   if (c.food && (!Array.isArray(c.food.options) || c.food.options.some((x) => typeof x !== "string" || !x.trim()))) {
     throw new Error('"food.options" must be a list of text choices, like ["Cheese", "Pepperoni"].');
   }
+  if (c.food && c.food.multiple != null && typeof c.food.multiple !== "boolean") throw new Error('"food.multiple" must be true (tick any) or false (pick one).');
+  if (c.food && c.food.other != null && typeof c.food.other !== "boolean" && (typeof c.food.other !== "string" || !c.food.other.trim())) {
+    throw new Error('"food.other" must be true, false, or the text for the write-in choice, like "Something else".');
+  }
   const comma = (c.food?.options || []).find((x) => x.includes(","));
   if (comma) {
     throw new Error(`"food.options" can't contain commas ("${comma}"), because commas separate the items a guest ticks and the admin totals would split it in two. Use a dash or "and" instead, like "Mac - extra cheesy".`);
@@ -133,7 +138,7 @@ export async function build(opts = {}) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.address)}`;
   const siteUrl = c.siteUrl;
   const abs = (p) => (siteUrl ? `${siteUrl}${p}` : p);
-  if (!siteUrl && !o.demo) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
+  if (!siteUrl && !o.demo && !o.config) console.warn('! "siteUrl" is empty in event.config.json: link previews need absolute URLs. Deploy once, set siteUrl to your live address, and deploy again before sharing.');
   if (!o.demo && !o.config && end < new Date()) console.warn(`! The party date (${c.date}) is in the past. Check "date" in ${c._file}.`);
   if (siteUrl.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(siteUrl)) console.warn('! "siteUrl" uses http://. Use https:// so link previews work.');
   const notifyTo = c.notify?.to || [];
@@ -151,6 +156,15 @@ export async function build(opts = {}) {
 
   // ---- html ----
   const food = c.food && c.food.options?.length ? c.food : null;
+  const foodMultiple = food ? food.multiple !== false : true;           // default: tick any
+  const foodOtherLabel = food && food.other ? (typeof food.other === "string" ? food.other : copy.foodOther) : null;
+  const foodType = foodMultiple ? "checkbox" : "radio";
+  const foodChoice = (value, text, extra = "") => `          <label class="choice"><input type="${foodType}" name="food" value="${esc(value)}"${extra}> <span>${esc(text)}</span></label>`;
+  const foodHtml = !food ? "" : `        <fieldset>
+          <legend>(${esc(copy.optional)}) ${esc(food.question || "Any food preferences?")}</legend>
+${foodMultiple ? "" : foodChoice("", copy.foodNone, " checked") + "\n"}${food.options.map((o) => foodChoice(o, o)).join("\n")}
+${foodOtherLabel ? `          <label class="choice choice-other"><input type="${foodType}" name="food" value="__other__"> <input class="other-text" type="text" name="food_other" maxlength="60" placeholder="${esc(foodOtherLabel)}" aria-label="${esc(foodOtherLabel)}" autocomplete="off"></label>\n` : ""}        </fieldset>
+`;
   const foodLabel = food?.label || "Food";
   const planHtml = (c.plan || []).map((p) => `      <li><b>${esc(fmtClock(p.time))}</b> ${esc(p.text)}</li>`).join("\n");
   const kidOptions = Array.from({ length: maxKids }, (_, i) => `<option>${i + 1}</option>`).join("");
@@ -264,11 +278,7 @@ ${note ? `    <p>${esc(note)}</p>\n` : ""}  </section>
           <legend>${esc(copy.stayLegend)}</legend>
           <label class="choice check"><input type="checkbox" name="dropping_off"> <span id="dropoff-label">${esc(fill(copy.dropoff, { end: endShort, name: copy.dropoffDefaultName }))}</span></label>
         </fieldset>
-${food ? `        <fieldset>
-          <legend>(${esc(copy.optional)}) ${esc(food.question || "Any food preferences?")}</legend>
-${food.options.map((o) => `          <label class="choice"><input type="checkbox" name="food" value="${esc(o)}"> <span>${esc(o)}</span></label>`).join("\n")}
-        </fieldset>
-` : ""}        <label>${esc(copy.allergies)}
+${foodHtml}        <label>${esc(copy.allergies)}
           <input name="allergies" maxlength="200" placeholder="${esc(copy.optional)}">
         </label>
       </div>
@@ -326,6 +336,7 @@ ${c.footer ? `  <footer>${esc(c.footer)}</footer>\n` : ""}</main>
   const adminHtml = fs.readFileSync(path.join(root, "src/template/admin.html"), "utf8")
     .replaceAll("{{adminTitle}}", esc(`${c.honoree}'s guest list`))
     .replaceAll("{{foodLabel}}", esc(foodLabel))
+    .replaceAll("{{foodOptions}}", inlineJson(food ? food.options : []))
     .replaceAll("{{maxKids}}", String(maxKids));
 
   // ---- favicon ----

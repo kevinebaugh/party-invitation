@@ -65,6 +65,8 @@ legend{padding:0;margin-bottom:6px}
 .choice *{cursor:pointer}
 .choice input{width:22px;height:22px;accent-color:var(--check);flex:none}
 .choice:has(input:checked){border-color:var(--check)}
+.choice.choice-other input.other-text{flex:1;min-width:0;width:auto;margin:0;padding:6px 2px;background:transparent;border:0;border-bottom:3px solid var(--field-line);border-radius:0;cursor:text;outline:none}
+.choice-other:focus-within{outline:3px solid var(--focus);outline-offset:2px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 #msg{min-height:1.5em;color:var(--warn);margin:0 0 12px}
 #rsvp-form button[type=submit]{display:block;width:100%;text-align:center}

@@ -61,7 +61,7 @@ function parseRsvp(b: Record<string, unknown>): Parsed | { error: string } {
   const staying = attending && b.parents_staying === true ? 1 : 0;
   const kids = attending ? Math.min(config.maxKids, Math.max(1, Math.floor(Number(b.num_kids)) || 1)) : 0;
   const key = `${child.toLowerCase()}|${parent.toLowerCase()}`;
-  const values = [child, parent, attending ? 1 : 0, staying, clean(b.food_preference, 160), clean(b.allergies, 200), clean(b.notes, 500), key, kids] as const;
+  const values = [child, parent, attending ? 1 : 0, staying, clean(b.food_preference, 300), clean(b.allergies, 200), clean(b.notes, 500), key, kids] as const;
   return { values, attending };
 }
 

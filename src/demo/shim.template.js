@@ -19,7 +19,7 @@
     row(2, 3100, { child_name: "Priya", parent_name: "Anita Rao", attending: 1, num_kids: 1, parents_staying: 1, food_preference: "Anything is fine", allergies: "Peanuts" }),
     row(3, 1500, { child_name: "Marcus", parent_name: "Dee Johnson", attending: 1, num_kids: 1, food_preference: "Hawaiian (controversial)" }),
     row(4, 900, { child_name: "Lena", parent_name: "Chris Park", attending: 0, num_kids: 0, notes: "So sorry, we're away that weekend!" }),
-    row(5, 240, { child_name: "Noah", parent_name: "Jamie Cole", attending: 1, num_kids: 1, food_preference: "Cheese", allergies: "Gluten-free" }),
+    row(5, 240, { child_name: "Noah", parent_name: "Jamie Cole", attending: 1, num_kids: 1, food_preference: "Cheese, Sausage", allergies: "Gluten-free" }),
     { ...row(6, 60, { child_name: "Test Entry", parent_name: "Test", attending: 1, num_kids: 1 }), deleted_at: stamp(30) },
   ];
   const save = (v) => local.setItem(DATA_KEY, JSON.stringify(v));
@@ -40,7 +40,7 @@
       child_name: child, parent_name: parent, attending: attending ? 1 : 0,
       parents_staying: attending && b.parents_staying === true ? 1 : 0,
       num_kids: attending ? Math.min(MAX_KIDS, Math.max(1, Math.floor(Number(b.num_kids)) || 1)) : 0,
-      food_preference: clean(b.food_preference, 160), allergies: clean(b.allergies, 200), notes: clean(b.notes, 500),
+      food_preference: clean(b.food_preference, 300), allergies: clean(b.allergies, 200), notes: clean(b.notes, 500),
       key: `${child}|${parent}`.toLowerCase(),
     };
   }
