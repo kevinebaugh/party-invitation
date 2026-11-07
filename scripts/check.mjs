@@ -186,6 +186,11 @@ try {
     !rmState.js && rmState.anim === "none" && rmState.cardOpacity === "1" ? ok("reduced motion respected") : fail(id, `reduced motion: ${JSON.stringify(rmState)}`);
     await rm.close();
 
+    // every invitation links back to the project
+    const credit = await page.evaluate(() => { const a = document.querySelector("footer a"); return a ? { href: a.href, text: a.textContent, rel: a.rel, target: a.target } : null; });
+    credit && credit.href === "https://github.com/kevinebaugh/party-invitation" && credit.text === "party-invitation" && credit.rel.includes("noopener")
+      ? ok("footer links back to party-invitation") : fail(id, `footer link: ${JSON.stringify(credit)}`);
+
     // preview tags present in the static HTML
     const head = fs.readFileSync(path.join(out, "index.html"), "utf8");
     ["og:title", "og:description", "og:image", "twitter:card"].every((t) => head.includes(t)) ? ok("link-preview tags are in the static HTML") : fail(id, "missing og/twitter tags");

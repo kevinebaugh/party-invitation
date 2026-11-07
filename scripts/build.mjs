@@ -24,6 +24,9 @@ const fill = (s, v) => s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const inlineJson = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
 
+// Every generated invitation links back here (turn it off with "credit": false in the config).
+const REPO_URL = "https://github.com/kevinebaugh/party-invitation";
+
 const DEFAULT_COPY = {
   kicker: "You're invited",
   sub: "You're invited to a {partyType}!",
@@ -95,6 +98,7 @@ function loadConfig(o) {
   if (c.food && (!Array.isArray(c.food.options) || c.food.options.some((x) => typeof x !== "string" || !x.trim()))) {
     throw new Error('"food.options" must be a list of text choices, like ["Cheese", "Pepperoni"].');
   }
+  if (c.credit != null && typeof c.credit !== "boolean") throw new Error('"credit" must be true or false.');
   if (c.food && c.food.multiple != null && typeof c.food.multiple !== "boolean") throw new Error('"food.multiple" must be true (tick any) or false (pick one).');
   if (c.food && c.food.other != null && typeof c.food.other !== "boolean" && (typeof c.food.other !== "string" || !c.food.other.trim())) {
     throw new Error('"food.other" must be true, false, or the text for the write-in choice, like "Something else".');
@@ -156,6 +160,10 @@ export async function build(opts = {}) {
 
   // ---- html ----
   const food = c.food && c.food.options?.length ? c.food : null;
+  const credit = c.credit !== false
+    ? `Made with <a href="${REPO_URL}" target="_blank" rel="noopener">party-invitation</a>` : "";
+  const footerText = [c.footer ? esc(c.footer) : "", credit].filter(Boolean).join(" · ");
+  const footerHtml = footerText ? `  <footer>${footerText}</footer>\n` : "";
   const foodMultiple = food ? food.multiple !== false : true;           // default: tick any
   const foodOtherLabel = food && food.other ? (typeof food.other === "string" ? food.other : copy.foodOther) : null;
   const foodType = foodMultiple ? "checkbox" : "radio";
@@ -296,7 +304,7 @@ ${foodHtml}        <label>${esc(copy.allergies)}
     </div>
   </section>
 
-${c.footer ? `  <footer>${esc(c.footer)}</footer>\n` : ""}</main>
+${footerHtml}</main>
 <script type="application/json" id="party-config">${inlineJson(partyConfig)}</script>
 <script src="/app.js"></script>
 </body>

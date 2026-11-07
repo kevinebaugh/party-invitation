@@ -76,6 +76,7 @@ Open `event.config.json` (or your `event.config.local.json`) and change the exam
 | `maxKids` | Highest number in the "how many kids" dropdown (max 10) |
 | `siteUrl` | Your live address, like `https://party.example.com` (no path). Leave it empty until after the first deploy (see step 4) |
 | `notify` | Optional email notifications (see [below](#email-notifications-optional)) |
+| `footer`, `credit` | Text at the bottom of the page, like `"Designed by Alex"`. The footer also says "Made with party-invitation", linking to this project. Set `"credit": false` to remove that link |
 | `copy` | Override any wording, such as the kicker, button text, or confirmation messages |
 
 ### 3. Try it on your computer

@@ -71,7 +71,8 @@ legend{padding:0;margin-bottom:6px}
 #msg{min-height:1.5em;color:var(--warn);margin:0 0 12px}
 #rsvp-form button[type=submit]{display:block;width:100%;text-align:center}
 #again{margin-top:4px}
-footer{text-align:center;font-size:14px;opacity:.75;color:var(--ink)}
+footer{text-align:center;font-size:14px;opacity:.8;color:var(--ink)}
+footer a{color:inherit;font-weight:800;text-underline-offset:3px}
 
 /* reveal + confetti */
 .js .card{opacity:0;transform:translateY(28px) scale(.96)}
