@@ -175,7 +175,7 @@ Things to know:
 
 ## The admin page
 
-`/admin` asks for the passphrase you stored with `wrangler secret put ADMIN_PASSPHRASE`. To change it later, run that command again. This is a simple shared passphrase meant to keep a party guest list private, not bank-grade security.
+`/admin` asks for the passphrase you stored with `wrangler secret put ADMIN_PASSPHRASE`. To change it later, run that command again. This is a simple shared passphrase meant to keep a party guest list private, not bank-grade security: there's no lockout after wrong guesses, so choose a long passphrase.
 
 - **Delete** moves a response to the **Deleted** tab (restorable at any time).
 - **Delete forever**, in the Deleted tab, starts a 5-second countdown you can cancel.
@@ -225,7 +225,8 @@ Handy if you want to build your own form. `POST /api/rsvp` with JSON:
 - The page serves from the root of its address, so use a subdomain if the domain hosts something else.
 - English only. You can reword everything through `copy`.
 - RSVPs are stored in your own Cloudflare D1 database; nothing is sent anywhere else. Names, allergies and notes are personal data, so delete the database when the party is over (`npx wrangler d1 delete party-rsvps`).
-- The page loads fonts from Google Fonts.
+- The page loads fonts from Google Fonts, so Google sees guests' IP addresses when they open it.
+- Spam protection on the RSVP form is a hidden field that bots tend to fill in. It stops casual bots, not determined ones. Cloudflare Turnstile would be the next step if you ever see junk RSVPs (an RSVP can always be deleted from the admin page).
 
 ## License
 
