@@ -76,6 +76,7 @@ Open `event.config.json` (or your `event.config.local.json`) and change the exam
 | `maxKids` | Highest number in the "how many kids" dropdown (max 10) |
 | `siteUrl` | Your live address, like `https://party.example.com` (no path). Leave it empty until after the first deploy (see step 4) |
 | `notify` | Optional email notifications (see [below](#email-notifications-optional)) |
+| `askEmail` | Adds an optional "Your email" box to the RSVP form so you can reply to guests (see [email notifications](#email-notifications-optional)). It defaults to on when `notify.to` is set, and off otherwise. Set `true` or `false` to override |
 | `footer`, `credit` | Text at the bottom of the page, like `"Designed by Alex"`. The footer also says "Made with party-invitation", linking to this project. Set `"credit": false` to remove that link |
 | `copy` | Override any wording, such as the kicker, button text, or confirmation messages |
 
@@ -172,6 +173,10 @@ Get an email each time someone RSVPs. This needs a custom domain on Cloudflare (
    `from` must be an address at the domain you set up in step 1. It doesn't need to be a real mailbox.
 5. Run `npm run deploy`, then submit a test RSVP from your invitation (and delete it from the admin page).
 
+**Replying to guests.** When notifications are on, the RSVP form shows an optional "Your email" box. If a guest fills it in, the notification email's **Reply-To** is that guest, so hitting Reply goes straight to them. It also appears in the email and in the admin page. Guests who leave it blank still get you notified, just without a Reply-To. The address is checked strictly, because it goes into an email header. Setting `"askEmail": false` removes the box.
+
+If you set up your database before this feature existed, run `npm run db:migrate` once to add the new column.
+
 Things to know:
 
 - If one address in `to` isn't verified, the send can fail for everyone. Verify them all first.
@@ -222,7 +227,7 @@ Handy if you want to build your own form. `POST /api/rsvp` with JSON:
   "parents_staying": false, "food_preference": "Cheese", "allergies": "", "notes": "" }
 ```
 
-`child_name`, `parent_name` and `attending` are required. `food_preference` is the guest's choices separated by commas, like `"Cheese, Pepperoni"`. Sending the same two names again updates the earlier answer. The admin endpoints live under `/api/admin/` and need the login cookie.
+`child_name`, `parent_name` and `attending` are required. `parent_email` is optional (used as the notification's Reply-To). `food_preference` is the guest's choices separated by commas, like `"Cheese, Pepperoni"`. Sending the same two names again updates the earlier answer. The admin endpoints live under `/api/admin/` and need the login cookie.
 
 ## Good to know
 

@@ -135,6 +135,12 @@
     msg.textContent = "";
     const f = new FormData(form);
     const attending = f.get("attending");
+    const email = String(f.get("parent_email") || "").trim();
+    if (email && !/^[^\s@<>(),;:"\\[\]]+@[^\s@<>(),;:"\\[\]]+\.[^\s@<>(),;:"\\[\]]{2,}$/.test(email)) {
+      msg.textContent = P.copy.errorEmail;
+      form.elements.parent_email.focus();
+      return;
+    }
     if (!f.get("child_name").trim() || !f.get("parent_name").trim() || !attending) {
       msg.textContent = P.copy.errorMissing;
       return;
@@ -146,7 +152,7 @@
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          child_name: titleCase(f.get("child_name")), parent_name: titleCase(f.get("parent_name")),
+          child_name: titleCase(f.get("child_name")), parent_name: titleCase(f.get("parent_name")), parent_email: email,
           attending: attending === "yes", parents_staying: !f.get("dropping_off"),
           num_kids: +f.get("num_kids") || 1,
           food_preference: chosenFood(f), allergies: f.get("allergies"),

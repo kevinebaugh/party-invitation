@@ -200,6 +200,123 @@ try {
     server.close();
   }
 
+  // ---- the Worker itself (real code, fake database and mail binding): RSVP email handling + Reply-To ----
+  if (!only.length) {
+    console.log("\nworker");
+    const { build: esbuild } = await import("esbuild");
+    const testConfig = {
+      maxKids: 5, foodLabel: "Food", emailBrand: "Alex's 7th birthday", emailDate: "Mar 14",
+      notify: { to: ["host@example.com"], from: "rsvp@example.com" },
+      copy: { errorMissing: "missing fields", errorEmail: "bad email" },
+    };
+    fs.mkdirSync(path.join(root, ".cache", "worker-test"), { recursive: true });
+    const cfgFile = path.join(root, ".cache", "worker-test", "config.json");
+    fs.writeFileSync(cfgFile, JSON.stringify(testConfig));
+    const bundle = path.join(root, ".cache", "worker-test", "worker.mjs");
+    await esbuild({
+      entryPoints: [path.join(root, "src", "worker.ts")], outfile: bundle, bundle: true, format: "esm", platform: "neutral", logLevel: "silent",
+      plugins: [{ name: "test-config", setup: (b) => b.onResolve({ filter: /config\.generated\.json$/ }, () => ({ path: cfgFile })) }],
+    });
+    const worker = (await import(pathToFileURL(bundle).href + `?t=${Date.now()}`)).default;
+
+    const makeEnv = () => {
+      const db = [], sent = [];
+      return {
+        db, sent,
+        env: {
+          ADMIN_PASSPHRASE: "test-pass", ASSETS: { fetch: async () => new Response("asset") },
+          EMAIL: { send: async (m) => { sent.push(m); return { messageId: "x" }; } },
+          DB: { prepare: (sql) => ({ bind: (...args) => ({ run: async () => { db.push({ sql, args }); return { meta: { changes: 1 } }; }, all: async () => ({ results: [] }) }) }) },
+        },
+      };
+    };
+    const post = async (body, e = makeEnv(), url = "https://party.example.com/api/rsvp", method = "POST", headers = {}) => {
+      const pending = [];
+      const res = await worker.fetch(new Request(url, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }), e.env, { waitUntil: (p) => pending.push(p) });
+      await Promise.all(pending);
+      return { res, e, json: await res.json() };
+    };
+    const rsvp = { child_name: "sam", parent_name: "pat lee", attending: true, num_kids: 1 };
+
+    let t = await post({ ...rsvp, parent_email: "pat.lee@example.com" });
+    const m = t.e.sent[0];
+    t.res.status === 200 && m && m.replyTo?.email === "pat.lee@example.com" && m.replyTo?.name === "Pat Lee"
+      ? ok("a valid email becomes the Reply-To (with the guest's name)") : fail("worker", `replyTo: ${JSON.stringify(m?.replyTo)} status ${t.res.status}`);
+    m?.text.includes("Email: pat.lee@example.com") && m?.html.includes("pat.lee@example.com") ? ok("the notification shows the guest's email") : fail("worker", "email missing from notification body");
+    t.e.db[0]?.args.at(-1) === "pat.lee@example.com" ? ok("the email is saved with the RSVP") : fail("worker", `db args: ${JSON.stringify(t.e.db[0]?.args)}`);
+
+    t = await post(rsvp);
+    t.res.status === 200 && t.e.sent.length === 1 && !("replyTo" in t.e.sent[0]) ? ok("no email given: notification sent without a Reply-To") : fail("worker", `sent: ${JSON.stringify(t.e.sent[0]?.replyTo)}`);
+
+    for (const bad of ["not an email", "a@b", "a@b.com, evil@x.com", "a@b.com\r\nBcc: evil@x.com", '"x y"@b.com', "a@b.com>", "<a@b.com>", "a@@b.com", "a b@c.com", "x@y.com;z@y.com"]) {
+      t = await post({ ...rsvp, parent_email: bad });
+      t.res.status === 400 && t.json.error === "bad email" && t.e.db.length === 0 && t.e.sent.length === 0 ? null : fail("worker", `accepted a bad email: ${JSON.stringify(bad)} -> ${t.res.status}`);
+    }
+    ok("malformed and header-injection emails are rejected before saving or sending");
+
+    t = await post({ ...rsvp, parent_name: "Pat <evil@x.com>\"", parent_email: "pat@example.com" });
+    /^[\p{L}\p{N} .'’-]+$/u.test(t.e.sent[0]?.replyTo?.name || "") ? ok("odd characters in the guest's name can't reach the Reply-To header") : fail("worker", `name: ${JSON.stringify(t.e.sent[0]?.replyTo)}`);
+
+    t = await post({ ...rsvp, parent_name: "<<>>", parent_email: "pat@example.com" });
+    typeof t.e.sent[0]?.replyTo === "string" ? ok("a name with nothing safe left falls back to a plain address") : fail("worker", `replyTo: ${JSON.stringify(t.e.sent[0]?.replyTo)}`);
+
+    // admin edit keeps the email too
+    const e2 = makeEnv();
+    const login = await post({ passphrase: "test-pass" }, e2, "https://party.example.com/api/admin/login");
+    const cookie = login.res.headers.get("set-cookie").split(";")[0];
+    const edit = await post({ ...rsvp, parent_email: "new@example.com" }, e2, "https://party.example.com/api/admin/rsvps/7", "PUT", { cookie });
+    edit.res.status === 200 && e2.db.at(-1).args.at(9) === "new@example.com" && e2.db.at(-1).args.at(10) === 7 ? ok("admin edit saves the email") : fail("worker", `edit: ${edit.res.status} ${JSON.stringify(e2.db.at(-1)?.args)}`);
+    const badEdit = await post({ ...rsvp, parent_email: "nope" }, e2, "https://party.example.com/api/admin/rsvps/7", "PUT", { cookie });
+    badEdit.res.status === 400 ? ok("admin edit rejects a bad email") : fail("worker", `bad edit: ${badEdit.res.status}`);
+  }
+
+  // ---- optional email field on the form ----
+  if (!only.length) {
+    console.log("\nemail field");
+    const variants = [
+      { name: "notifications on", overrides: { notify: { to: ["host@example.com"], from: "rsvp@example.com" }, askEmail: undefined }, expect: true },
+      { name: "notifications off", overrides: { notify: { to: [], from: "" }, askEmail: undefined }, expect: false },
+      { name: "askEmail forced on", overrides: { notify: { to: [], from: "" }, askEmail: true }, expect: true },
+      { name: "askEmail forced off", overrides: { notify: { to: ["host@example.com"], from: "rsvp@example.com" }, askEmail: false }, expect: false },
+    ];
+    for (const [i, v] of variants.entries()) {
+      const outDir = path.join(root, ".cache", "check", `_email${i}`);
+      const cfgPath = path.join(root, ".cache", "check", `_email${i}.json`);
+      const base = JSON.parse(fs.readFileSync(path.join(root, "scripts", "demo.config.json"), "utf8"));
+      delete base.askEmail;
+      fs.writeFileSync(cfgPath, JSON.stringify({ ...base, ...Object.fromEntries(Object.entries(v.overrides).filter(([, x]) => x !== undefined)) }));
+      await build({ config: path.relative(root, cfgPath), theme: "arcade", out: outDir, "skip-og": true });
+      const has = fs.readFileSync(path.join(outDir, "index.html"), "utf8").includes('name="parent_email"');
+      has === v.expect ? ok(`${v.name}: email field ${v.expect ? "shown" : "hidden"}`) : fail("email", `${v.name}: field present = ${has}`);
+      const adminHidden = fs.readFileSync(path.join(outDir, "admin", "index.html"), "utf8").includes(".col-email{display:none!important}");
+      adminHidden === !v.expect ? ok(`${v.name}: admin email column ${v.expect ? "shown" : "hidden"}`) : fail("email", `${v.name}: admin column hidden = ${adminHidden}`);
+    }
+    // behaviour in a browser: bad email stops the submit, good one is sent, blank is fine
+    const outDir = path.join(root, ".cache", "check", "_email0");
+    const srv = await serve(outDir);
+    const ectx = await browser.newContext({ viewport: { width: 375, height: 812 }, reducedMotion: "reduce" });
+    const ep = await ectx.newPage();
+    let sentBody = null, requests = 0;
+    await ep.route("**/api/rsvp", (route) => { requests++; sentBody = JSON.parse(route.request().postData()); route.fulfill({ json: { ok: true, attending: true } }); });
+    await ep.goto(`http://127.0.0.1:${srv.address().port}/`, { waitUntil: "networkidle" });
+    await ep.fill("input[name=child_name]", "Sam"); await ep.fill("input[name=parent_name]", "Pat");
+    await ep.check("input[name=attending][value=yes]");
+    await ep.fill("input[name=parent_email]", "pat at example");
+    await ep.locator("#rsvp-form button[type=submit]").click();
+    await ep.waitForTimeout(250);
+    const errText = await ep.$eval("#msg", (e) => e.textContent);
+    requests === 0 && /email/i.test(errText) ? ok("a bad email is caught on the page, nothing is sent") : fail("email", `requests ${requests}, message "${errText}"`);
+    await ep.fill("input[name=parent_email]", "pat@example.com");
+    await ep.locator("#rsvp-form button[type=submit]").click();
+    await ep.waitForFunction(() => !document.getElementById("done").hidden);
+    sentBody?.parent_email === "pat@example.com" ? ok("a valid email is sent with the RSVP") : fail("email", `sent: ${JSON.stringify(sentBody?.parent_email)}`);
+    await ep.click("#again"); await ep.fill("input[name=parent_email]", "");
+    await ep.locator("#rsvp-form button[type=submit]").click();
+    await ep.waitForFunction(() => !document.getElementById("done").hidden);
+    sentBody?.parent_email === "" ? ok("leaving the email blank is fine") : fail("email", `sent: ${JSON.stringify(sentBody?.parent_email)}`);
+    await ectx.close(); srv.close();
+  }
+
   // ---- food question: tick-any / pick-one, and the "Something else" write-in ----
   if (!only.length) {
     console.log("\nfood options");

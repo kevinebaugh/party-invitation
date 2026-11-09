@@ -6,7 +6,7 @@ interface Env {
   ASSETS: Fetcher;
   ADMIN_PASSPHRASE: string;
   // Optional: add `"send_email": [{ "name": "EMAIL" }]` to wrangler.jsonc to enable notifications (see README).
-  EMAIL?: { send(msg: { to: string | string[]; from: string; subject: string; text: string; html?: string }): Promise<unknown> };
+  EMAIL?: SendEmail;
 }
 
 const json = (data: unknown, status = 200, headers: HeadersInit = {}) =>
@@ -52,6 +52,11 @@ const titleCase = (s: string) => s.replace(/(^|[\s\-'’])(\p{L})/gu, (_m, p: st
 
 type Parsed = { values: readonly (string | number)[]; attending: boolean };
 
+// This address ends up in an email header, so be strict: no whitespace, quotes, angle brackets or other
+// characters that could be used to smuggle in extra headers or recipients.
+const EMAIL_RE = /^[^\s@<>(),;:"\\[\]]+@[^\s@<>(),;:"\\[\]]+\.[^\s@<>(),;:"\\[\]]{2,}$/;
+const validEmail = (s: string) => s.length <= 254 && EMAIL_RE.test(s);
+
 function parseRsvp(b: Record<string, unknown>): Parsed | { error: string } {
   const child = titleCase(clean(b.child_name, 80));
   const parent = titleCase(clean(b.parent_name, 80));
@@ -60,20 +65,23 @@ function parseRsvp(b: Record<string, unknown>): Parsed | { error: string } {
     return { error: config.copy.errorMissing };
   const staying = attending && b.parents_staying === true ? 1 : 0;
   const kids = attending ? Math.min(config.maxKids, Math.max(1, Math.floor(Number(b.num_kids)) || 1)) : 0;
+  const email = clean(b.parent_email, 254);
+  if (email && !validEmail(email)) return { error: config.copy.errorEmail };
   const key = `${child.toLowerCase()}|${parent.toLowerCase()}`;
-  const values = [child, parent, attending ? 1 : 0, staying, clean(b.food_preference, 300), clean(b.allergies, 200), clean(b.notes, 500), key, kids] as const;
+  const values = [child, parent, attending ? 1 : 0, staying, clean(b.food_preference, 300), clean(b.allergies, 200), clean(b.notes, 500), key, kids, email] as const;
   return { values, attending };
 }
 
 async function notify(env: Env, origin: string, r: Parsed) {
   const { to, from } = config.notify;
   if (!env.EMAIL || !to.length || !from) return; // notifications are optional
-  const [child, parent, , staying, food, allergies, notes, , kids] = r.values;
+  const [child, parent, , staying, food, allergies, notes, , kids, email] = r.values;
   const kidWord = kids === 1 ? "kid" : "kids";
   const adminUrl = `${origin}/admin`;
   const rows: [string, string][] = [
     ["Coming", r.attending ? `Yes, ${kids} ${kidWord}` : "No"],
     ...(r.attending ? ([["Parent", staying ? "Staying" : "Drop-off"]] as [string, string][]) : []),
+    ...(email ? ([["Email", String(email)]] as [string, string][]) : []),
     ...(food ? ([[config.foodLabel, String(food)]] as [string, string][]) : []),
     ...(allergies ? ([["Allergies / dietary", String(allergies)]] as [string, string][]) : []),
     ...(notes ? ([["Notes", String(notes)]] as [string, string][]) : []),
@@ -88,9 +96,13 @@ async function notify(env: Env, origin: string, r: Parsed) {
 <table style="width:100%;border-collapse:collapse;font-size:15px">${rows.map(([k, v]) => `<tr><td style="padding:8px 0;border-top:1px solid #eee;color:#6b6b85;width:40%;vertical-align:top">${escHtml(k)}</td><td style="padding:8px 0;border-top:1px solid #eee;font-weight:600">${escHtml(v)}</td></tr>`).join("")}</table>
 <a href="${escHtml(adminUrl)}" style="display:inline-block;margin-top:20px;background:#4b4bd6;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px">Open guest list</a>
 </div></div></body></html>`;
+  // Replying to the notification goes straight to the guest (only when they gave a valid email).
+  const safeName = String(parent).replace(/[^\p{L}\p{N} .'’-]/gu, "").trim();
+  const replyTo = email ? (safeName ? { name: safeName, email: String(email) } : String(email)) : undefined;
   const res = await env.EMAIL.send({
     to,
     from,
+    ...(replyTo ? { replyTo } : {}),
     subject: r.attending
       ? `${config.emailBrand} RSVP: ${child} is coming (${kids} ${kidWord})`
       : `${config.emailBrand} RSVP: ${child} can't make it`,
@@ -116,10 +128,10 @@ export default {
       const r = parseRsvp(b);
       if ("error" in r) return json({ error: r.error }, 400);
       await env.DB.prepare(
-        `INSERT INTO rsvps (child_name, parent_name, attending, parents_staying, food_preference, allergies, notes, key, num_kids)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+        `INSERT INTO rsvps (child_name, parent_name, attending, parents_staying, food_preference, allergies, notes, key, num_kids, parent_email)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
          ON CONFLICT(key) DO UPDATE SET attending=?3, parents_staying=?4, food_preference=?5,
-           allergies=?6, notes=?7, num_kids=?9, deleted_at=NULL, updated_at=datetime('now')`,
+           allergies=?6, notes=?7, num_kids=?9, parent_email=?10, deleted_at=NULL, updated_at=datetime('now')`,
       )
         .bind(...r.values)
         .run();
@@ -160,7 +172,7 @@ export default {
       try {
         const res = await env.DB.prepare(
           `UPDATE rsvps SET child_name=?1, parent_name=?2, attending=?3, parents_staying=?4, food_preference=?5,
-             allergies=?6, notes=?7, key=?8, num_kids=?9, updated_at=datetime('now') WHERE id=?10`,
+             allergies=?6, notes=?7, key=?8, num_kids=?9, parent_email=?10, updated_at=datetime('now') WHERE id=?11`,
         )
           .bind(...r.values, id)
           .run();

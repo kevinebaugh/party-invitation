@@ -13,10 +13,10 @@
 
   // ---- fake database ----
   const stamp = (minsAgo) => new Date(Date.now() - minsAgo * 60000).toISOString().replace("T", " ").slice(0, 19);
-  const row = (id, ago, o) => ({ id, created_at: stamp(ago), updated_at: stamp(ago), deleted_at: null, parents_staying: 0, food_preference: "", allergies: "", notes: "", ...o, key: `${o.child_name}|${o.parent_name}`.toLowerCase() });
+  const row = (id, ago, o) => ({ id, created_at: stamp(ago), updated_at: stamp(ago), deleted_at: null, parent_email: "", parents_staying: 0, food_preference: "", allergies: "", notes: "", ...o, key: `${o.child_name}|${o.parent_name}`.toLowerCase() });
   const seed = () => [
-    row(1, 5200, { child_name: "Sam And Jo", parent_name: "Taylor Reed", attending: 1, num_kids: 2, food_preference: "Cheese, Pepperoni", notes: "Jo is bringing a card!" }),
-    row(2, 3100, { child_name: "Priya", parent_name: "Anita Rao", attending: 1, num_kids: 1, parents_staying: 1, food_preference: "Anything is fine", allergies: "Peanuts" }),
+    row(1, 5200, { child_name: "Sam And Jo", parent_name: "Taylor Reed", parent_email: "taylor@example.com", attending: 1, num_kids: 2, food_preference: "Cheese, Pepperoni", notes: "Jo is bringing a card!" }),
+    row(2, 3100, { child_name: "Priya", parent_name: "Anita Rao", parent_email: "anita@example.com", attending: 1, num_kids: 1, parents_staying: 1, food_preference: "Anything is fine", allergies: "Peanuts" }),
     row(3, 1500, { child_name: "Marcus", parent_name: "Dee Johnson", attending: 1, num_kids: 1, food_preference: "Hawaiian (controversial)" }),
     row(4, 900, { child_name: "Lena", parent_name: "Chris Park", attending: 0, num_kids: 0, notes: "So sorry, we're away that weekend!" }),
     row(5, 240, { child_name: "Noah", parent_name: "Jamie Cole", attending: 1, num_kids: 1, food_preference: "Cheese, Sausage", allergies: "Gluten-free" }),
@@ -33,6 +33,8 @@
   const titleCase = (s) => s.replace(/(^|[\s\-'’])(\p{L})/gu, (m, p, c) => p + c.toUpperCase());
   function parse(b) {
     const child = titleCase(clean(b.child_name, 80)), parent = titleCase(clean(b.parent_name, 80));
+    const email = clean(b.parent_email, 254);
+    if (email && !(email.length <= 254 && /^[^\s@<>(),;:"\\[\]]+@[^\s@<>(),;:"\\[\]]+\.[^\s@<>(),;:"\\[\]]{2,}$/.test(email))) return { error: "That email address doesn't look right. You can leave it blank." };
     const valid = b.attending === true || b.attending === false || b.attending === "yes" || b.attending === "no";
     if (!child || !parent || !valid) return { error: "Please add both names and pick yes or no." };
     const attending = b.attending === true || b.attending === "yes";
@@ -41,6 +43,7 @@
       parents_staying: attending && b.parents_staying === true ? 1 : 0,
       num_kids: attending ? Math.min(MAX_KIDS, Math.max(1, Math.floor(Number(b.num_kids)) || 1)) : 0,
       food_preference: clean(b.food_preference, 300), allergies: clean(b.allergies, 200), notes: clean(b.notes, 500),
+      parent_email: email,
       key: `${child}|${parent}`.toLowerCase(),
     };
   }

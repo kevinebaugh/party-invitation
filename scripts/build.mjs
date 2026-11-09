@@ -43,6 +43,8 @@ const DEFAULT_COPY = {
   allergies: "(Optional) Any allergies or dietary restrictions?",
   notes: "Anything else?", optional: "Optional",
   foodOther: "Something else", foodNone: "No preference",
+  emailLabel: "Your email (optional)", emailPlaceholder: "So we can reply to you",
+  errorEmail: "That email address doesn't look right. You can leave it blank.",
   doneYesTitle: "See you there!", doneYesText: "You're on the list! We'll see {name} on {date} at {start}.",
   doneNoTitle: "Thanks for letting us know", doneNoText: "We'll miss {name}! Thanks for letting us know.",
   errorMissing: "Please add both names and pick yes or no.", errorGeneric: "Something went wrong. Please try again.",
@@ -98,6 +100,7 @@ function loadConfig(o) {
   if (c.food && (!Array.isArray(c.food.options) || c.food.options.some((x) => typeof x !== "string" || !x.trim()))) {
     throw new Error('"food.options" must be a list of text choices, like ["Cheese", "Pepperoni"].');
   }
+  if (c.askEmail != null && typeof c.askEmail !== "boolean") throw new Error('"askEmail" must be true or false.');
   if (c.credit != null && typeof c.credit !== "boolean") throw new Error('"credit" must be true or false.');
   if (c.food && c.food.multiple != null && typeof c.food.multiple !== "boolean") throw new Error('"food.multiple" must be true (tick any) or false (pick one).');
   if (c.food && c.food.other != null && typeof c.food.other !== "boolean" && (typeof c.food.other !== "string" || !c.food.other.trim())) {
@@ -147,7 +150,7 @@ export async function build(opts = {}) {
   if (siteUrl.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(siteUrl)) console.warn('! "siteUrl" uses http://. Use https:// so link previews work.');
   const notifyTo = c.notify?.to || [];
   if (notifyTo.length && !c.notify?.from) console.warn('! "notify.to" is set but "notify.from" is empty, so no emails will be sent. See the README section on email notifications.');
-  if (notifyTo.length && !o.demo && !/^\s*"send_email"/m.test(fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8"))) {
+  if (notifyTo.length && !o.demo && !o.config && !/^\s*"send_email"/m.test(fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8"))) {
     console.warn('! "notify.to" is set but wrangler.jsonc has no "send_email" binding, so no emails will be sent. See the README section on email notifications.');
   }
 
@@ -164,6 +167,12 @@ export async function build(opts = {}) {
     ? `Made with <a href="${REPO_URL}" target="_blank" rel="noopener">party-invitation</a>` : "";
   const footerText = [c.footer ? esc(c.footer) : "", credit].filter(Boolean).join(" · ");
   const footerHtml = footerText ? `  <footer>${footerText}</footer>\n` : "";
+  // Ask guests for an (optional) email only when it's useful: notifications are on, so replies can go to them.
+  const askEmail = c.askEmail != null ? c.askEmail : (c.notify?.to || []).length > 0;
+  const emailField = askEmail ? `      <label>${esc(copy.emailLabel)}
+        <input type="email" name="parent_email" maxlength="254" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="${esc(copy.emailPlaceholder)}">
+      </label>
+` : "";
   const foodMultiple = food ? food.multiple !== false : true;           // default: tick any
   const foodOtherLabel = food && food.other ? (typeof food.other === "string" ? food.other : copy.foodOther) : null;
   const foodType = foodMultiple ? "checkbox" : "radio";
@@ -188,7 +197,7 @@ ${foodOtherLabel ? `          <label class="choice choice-other"><input type="${
     sprites: theme.sprites, spriteOpacity: theme.spriteOpacity ?? 0.5, confetti: theme.confetti,
     vals: { date: dateLong, start: fmtTime(c.start), end: endShort },
     copy: {
-      ...Object.fromEntries(["doneYesTitle", "doneYesText", "doneNoTitle", "doneNoText", "attendDefault", "attendNamed", "dropoffDefaultName", "errorMissing", "errorGeneric"].map((k) => [k, copy[k]])),
+      ...Object.fromEntries(["doneYesTitle", "doneYesText", "doneNoTitle", "doneNoText", "attendDefault", "attendNamed", "dropoffDefaultName", "errorMissing", "errorGeneric", "errorEmail"].map((k) => [k, copy[k]])),
       dropoff: fill(copy.dropoff, { end: endShort }),
     },
   };
@@ -273,7 +282,7 @@ ${note ? `    <p>${esc(note)}</p>\n` : ""}  </section>
       <label>${esc(copy.parentLabel)}
         <input name="parent_name" required maxlength="80" autocapitalize="words" autocomplete="name" placeholder="${esc(copy.parentPlaceholder)}">
       </label>
-      <fieldset>
+${emailField}      <fieldset>
         <legend id="attend-legend">${esc(copy.attendDefault)}</legend>
         <label class="choice"><input type="radio" name="attending" value="yes" required> <span>${esc(copy.yes)}</span></label>
         <label class="choice"><input type="radio" name="attending" value="no"> <span>${esc(copy.no)}</span></label>
@@ -345,6 +354,7 @@ ${footerHtml}</main>
     .replaceAll("{{adminTitle}}", esc(`${c.honoree}'s guest list`))
     .replaceAll("{{foodLabel}}", esc(foodLabel))
     .replaceAll("{{foodOptions}}", inlineJson(food ? food.options : []))
+    .replaceAll("{{emailCss}}", askEmail ? "" : ".col-email{display:none!important}")
     .replaceAll("{{maxKids}}", String(maxKids));
 
   // ---- favicon ----
@@ -375,7 +385,7 @@ ${footerHtml}</main>
   const workerConfig = {
     maxKids, foodLabel, emailBrand, emailDate: dateShort,
     notify: { to: c.notify?.to || [], from: c.notify?.from || "" },
-    copy: { errorMissing: copy.errorMissing },
+    copy: { errorMissing: copy.errorMissing, errorEmail: copy.errorEmail },
   };
   if (!o.out) fs.writeFileSync(path.join(root, "src/config.generated.json"), JSON.stringify(workerConfig, null, 2) + "\n");
 

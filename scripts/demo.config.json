@@ -44,5 +44,6 @@
     "to": [],
     "from": ""
   },
-  "copy": {}
+  "copy": {},
+  "askEmail": true
 }
